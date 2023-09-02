@@ -23,11 +23,13 @@ path = "src/pdf_search/__about__.py"
 [tool.hatch.build.targets.sdist]
 exclude = [
   "/.gitignore",
+  "/.vscode",
   "/docs",
   "/venv",
+  "/vault",
   "/main.py",
-  "/testing.ipynb"
+  "/testing.ipynb",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/foo"]
+packages = ["src/pdf_search"]
