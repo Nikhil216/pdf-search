@@ -1,14 +1,13 @@
-import re
-import hashlib
 import argparse
 import pathlib
 from datetime import datetime
 from typing import List
 
 import sqlitedict
-import pypdf
 from rich.console import Console
 from rich.prompt import Prompt
+
+from . import pdf
 
 
 console = Console()
@@ -42,20 +41,21 @@ def run_console_loop(vault_path: pathlib.Path):
             match command:
                 case ["add", *rest]:
                     if rest:
-                        pdf_path = pathlib.Path(rest[0])
-                        reader = pypdf.PdfReader(pdf_path)
-                        writer = pypdf.PdfWriter(pdf_path)
-                        if not pdf_path.exists() or not pdf_path.is_file():
+                        pdf_file_path = pathlib.Path(rest[0])
+                        if not pdf_file_path.exists() or not pdf_file_path.is_file():
                             console.print(
-                                f"Error: PDF file does not exists: {pdf_path}", style="bold red"
+                                f"Error: PDF file does not exists: {pdf_file_path}",
+                                style="bold red",
                             )
+                            return
+                        pdf_file = pdf.PdfFile(pdf_file_path)
                         pdf_types = ("book", "paper")
                         metadata_keys = ["Author", "Title", "Year", "DOI"]
                         pdf_type = console.input(f"Type: [blue]{pdf_types}[/]: ")
                         if pdf_type == "book":
                             metadata_keys += ["Edition", "ISBN10", "ISBN13"]
                         ## TODO: Add page previewer
-                        metadata = reader.metadata
+                        metadata = pdf_file.metadata
                         metadata_dict = {}
                         for key in metadata_keys:
                             metadata_dict[f"/{key}"] = Prompt.ask(
@@ -65,12 +65,11 @@ def run_console_loop(vault_path: pathlib.Path):
                         time = datetime.now().strftime(f"D\072%Y%m%d%H%M%S{utc_time}")
                         metadata_dict["/ModDate"] = time
                         metadata_dict["/Producer"] = "PDF Search"
-                        writer.add_metadata(metadata_dict)
-                        pdf_file_name = generate_pdf_filename(metadata_dict)
-                        pdf_file_key = hashlib.sha1(reader.pages[0].hash_value_data()).hexdigest()
+                        pdf_file.update_metadata(metadata_dict)
+                        pdf_file_name = pdf_file.generate_filename()
+                        pdf_file_key = pdf_file.file_hash
                         pdf_file_path = vault_path / f"{pdf_type}s" / pdf_file_name
-                        with open(pdf_file_path, "wb") as f:
-                            writer.write(f)
+                        pdf_file.write(pdf_file_path)
                         file_db[pdf_file_key] = {
                             "type": pdf_type,
                             "title": metadata_dict["/Title"],
@@ -135,16 +134,3 @@ def command_parser(input_str: str) -> List[str]:
             else:
                 args[-1] += c
     return args
-
-
-def generate_pdf_filename(metadata_dict: dict) -> str:
-    author_names_list = [
-        [name for name in a.strip().split(" ") if not name.endswith(".")]
-        for a in metadata_dict["/Author"].split(",")
-    ]
-    authors_str = ", ".join([f"{names[0][0]}. {names[-1]}" for names in author_names_list])
-    valid_title = re.sub(r"\*\?\\\\/", "", metadata_dict["/Title"])
-    valid_title = re.sub(r':<>\|"-', " ", valid_title)
-    year = metadata_dict["/Year"]
-    edition = f"[{metadata_dict['/Edition']}] " if "/Edition" in metadata_dict else ""
-    return f"{authors_str} - {valid_title} {edition}({year}).pdf"
