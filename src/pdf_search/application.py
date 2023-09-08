@@ -47,7 +47,7 @@ def run_console_loop(vault_path: pathlib.Path):
                                 f"Error: PDF file does not exists: {pdf_file_path}",
                                 style="bold red",
                             )
-                            return
+                            continue
                         pdf_file = pdf.PdfFile(pdf_file_path)
                         pdf_types = ("book", "paper")
                         metadata_keys = ["Author", "Title", "Year", "DOI"]
@@ -90,6 +90,19 @@ def run_console_loop(vault_path: pathlib.Path):
                         console.print("Added PDF file")
                     else:
                         console.print("Error: missing file path in add command", style="bold red")
+                case ["remove", *rest]:
+                    if rest:
+                        pdf_file = pathlib.Path(rest[0])
+                        if pdf_file.exists() and pdf_file.is_file():
+                            if pdf_file.is_relative_to(vault_path):
+                                pdf_file.unlink()
+                                console.print(f"Deleted file {pdf_file.as_posix()}")
+                            else:
+                                console.print("Error: The given path is not in the vault")
+                        else:
+                            console.print("Error: The given path is not a file", style="bold red")
+                    else:
+                        console.print("Error: missing file path in remove command", style="bold red")
                 case ["quit"]:
                     return
                 case _:
