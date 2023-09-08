@@ -10,6 +10,7 @@ class PdfFile:
         self.file_path = pathlib.Path(file_path)
         self.reader = pypdf.PdfReader(file_path)
         self.writer = pypdf.PdfWriter(file_path)
+        self.writer.clone_document_from_reader(self.reader)
         self.metadata = dict(self.reader.metadata)
         self.file_hash = hashlib.sha1(self.reader.pages[0].hash_value_data()).hexdigest()
 
