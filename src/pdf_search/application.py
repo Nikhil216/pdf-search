@@ -79,10 +79,10 @@ def run_console_loop(vault_path: pathlib.Path):
                             "edition": metadata_dict["/Edition"]
                             if "/Edition" in metadata_dict
                             else "",
-                            "isbn10": metadata_dict["/ISBN10"]
+                            "isbn10": metadata_dict["/ISBN10"].replace("-", "")
                             if "/ISBN10" in metadata_dict
                             else "",
-                            "isbn13": metadata_dict["/ISBN13"]
+                            "isbn13": metadata_dict["/ISBN13"].replace("-", "")
                             if "/ISBN13" in metadata_dict
                             else "",
                             "filename": pdf_file_name,
