@@ -8,12 +8,11 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.progress import track
 import sqlitedict
-from whoosh.analysis import StemmingAnalyzer, StandardAnalyzer
-from whoosh import fields as f
 from whoosh.qparser import QueryParser
 from whoosh import index as whoosh_index
 
 from . import pdf
+from . import vault
 
 
 console = Console()
@@ -31,7 +30,7 @@ def main():
 
 
 def run_console_loop(vault_path: pathlib.Path):
-    result = check_vault_status(vault_path)
+    result = vault.check_vault_status(vault_path)
     match result:
         case ("Ok", msg):
             if msg:
@@ -169,32 +168,6 @@ def run_console_loop(vault_path: pathlib.Path):
                     console.print(f"Error: invalid command {command}", style="bold red")
 
 
-def check_vault_status(vault_path: pathlib.Path):
-    if not vault_path.exists() or not vault_path.is_dir():
-        return ("Error", "The vault directory does not exists")
-    books_path = vault_path / "books"
-    papers_path = vault_path / "papers"
-    index_path = vault_path / "index"
-    db_path = vault_path / "vault.db"
-    created = []
-    if not db_path.exists():
-        db_path.touch()
-        created.append("database")
-    if not index_path.exists() or not index_path.is_dir():
-        index_path.mkdir()
-        schema = f.Schema(
-            key=f.ID(stored=True), text=f.TEXT(analyzer=StemmingAnalyzer()), url=f.STORED
-        )
-        whoosh_index.create_in(index_path, schema, "pages")
-        created.append("index")
-    if not books_path.exists() or not books_path.is_dir():
-        books_path.mkdir()
-        created.append("books")
-    if not papers_path.exists() or not papers_path.is_dir():
-        papers_path.mkdir()
-        created.append("papers")
-    ## TODO: Check for missing files
-    return ("Ok", f'Created {", ".join(created)}' if created else "")
 
 
 def command_parser(input_str: str) -> List[str]:
