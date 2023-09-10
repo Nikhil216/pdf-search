@@ -1,8 +1,10 @@
 import hashlib
 import pathlib
 import re
+from urllib.parse import quote
 
 import pypdf
+from whoosh import index as whoosh_index
 
 
 class PdfFile:
@@ -37,3 +39,21 @@ class PdfFile:
         if file_path is None:
             file_path = self.generate_filename()
         self.writer.write(file_path)
+
+    def write_index(self, file_path: pathlib.Path, index_path: pathlib.Path, progress_track):
+        index = whoosh_index.open_dir(index_path, "pages")
+        index_writer = index.writer()
+        for page in progress_track(self.reader.pages):
+            page_key = page.hash_func(page.hash_value_data()).hexdigest()
+            page_text = page.extract_text()
+            file_path_encoded = quote(file_path.resolve().as_posix())
+            page_url = f"file:///{file_path_encoded}#page={page.page_number}"
+            # import pdb
+            # pdb.set_trace()
+            index_writer.add_document(
+                key=page_key,
+                text=page_text,
+                url=page_url
+            )
+        index_writer.commit()
+        index.close()

@@ -3,9 +3,13 @@ import pathlib
 from datetime import datetime
 from typing import List
 
-import sqlitedict
 from rich.console import Console
 from rich.prompt import Prompt
+from rich.progress import track
+import sqlitedict
+from whoosh.analysis import StemmingAnalyzer, StandardAnalyzer
+from whoosh import fields as f
+from whoosh import index as whoosh_index
 
 from . import pdf
 
@@ -87,6 +91,9 @@ def run_console_loop(vault_path: pathlib.Path):
                             else "",
                             "filename": pdf_file_name,
                         }
+                        progress_track = lambda it: track(it, description="Indexing...")
+                        index_path = vault_path / "index"
+                        pdf_file.write_index(pdf_file_path, index_path, progress_track)
                         console.print("Added PDF file")
                     else:
                         console.print("Error: missing file path in add command", style="bold red")
@@ -114,11 +121,19 @@ def check_vault_status(vault_path: pathlib.Path):
         return ("Error", "The vault directory does not exists")
     books_path = vault_path / "books"
     papers_path = vault_path / "papers"
+    index_path = vault_path / "index"
     db_path = vault_path / "vault.db"
     created = []
     if not db_path.exists():
         db_path.touch()
         created.append("database")
+    if not index_path.exists() or not index_path.is_dir():
+        index_path.mkdir()
+        schema = f.Schema(
+            key=f.ID(stored=True), text=f.TEXT(analyzer=StemmingAnalyzer()), url=f.STORED
+        )
+        whoosh_index.create_in(index_path, schema, "pages")
+        created.append("index")
     if not books_path.exists() or not books_path.is_dir():
         books_path.mkdir()
         created.append("books")
