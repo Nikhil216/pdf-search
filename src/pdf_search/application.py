@@ -1,6 +1,7 @@
 import argparse
-import pathlib
 from datetime import datetime
+import pathlib
+import shutil
 from typing import List
 
 from rich.console import Console
@@ -9,6 +10,7 @@ from rich.progress import track
 import sqlitedict
 from whoosh.analysis import StemmingAnalyzer, StandardAnalyzer
 from whoosh import fields as f
+from whoosh.qparser import QueryParser
 from whoosh import index as whoosh_index
 
 from . import pdf
@@ -109,7 +111,23 @@ def run_console_loop(vault_path: pathlib.Path):
                         else:
                             console.print("Error: The given path is not a file", style="bold red")
                     else:
-                        console.print("Error: missing file path in remove command", style="bold red")
+                        console.print(
+                            "Error: missing file path in remove command", style="bold red"
+                        )
+                case ["search", *rest]:
+                    if rest:
+                        search_query = " ".join(rest)
+                        index_path = vault_path / "index"
+                        index = whoosh_index.open_dir(index_path, "pages")
+                        qp = QueryParser("text", schema=index.schema)
+                        q = qp.parse(search_query)
+                        with index.searcher() as s:
+                            results = s.search(q)
+                            for page in results:
+                                console.print(page["url"], style="underline blue")
+                        index.close()
+                    else:
+                        console.print("Error: missing search query", style="bold red")
                 case ["quit"]:
                     return
                 case _:
