@@ -101,11 +101,21 @@ def run_console_loop(vault_path: pathlib.Path):
                         console.print("Error: missing file path in add command", style="bold red")
                 case ["remove", *rest]:
                     if rest:
-                        pdf_file = pathlib.Path(rest[0])
-                        if pdf_file.exists() and pdf_file.is_file():
-                            if pdf_file.is_relative_to(vault_path):
-                                pdf_file.unlink()
-                                console.print(f"Deleted file {pdf_file.as_posix()}")
+                        pdf_file_path = pathlib.Path(rest[0])
+                        pdf_file_path = vault_path / pdf_file_path
+                        if pdf_file_path.exists() and pdf_file_path.is_file():
+                            if pdf_file_path.is_relative_to(vault_path):
+                                pdf_file = pdf.PdfFile(pdf_file_path)
+                                pdf_file_key = pdf_file.file_hash
+                                del file_db[pdf_file_key]
+                                index_path = vault_path / "index"
+                                index = whoosh_index.open_dir(index_path, "pages")
+                                index_writer = index.writer()
+                                index_writer.delete_by_term("file_key", pdf_file.file_hash)
+                                index_writer.commit()
+                                index.close()
+                                pdf_file_path.unlink()
+                                console.print(f"Deleted file {pdf_file_path.as_posix()}")
                             else:
                                 console.print("Error: The given path is not in the vault")
                         else:
@@ -128,6 +138,31 @@ def run_console_loop(vault_path: pathlib.Path):
                         index.close()
                     else:
                         console.print("Error: missing search query", style="bold red")
+                case ["nuke"]:
+                    response = Prompt.ask(
+                        "Are you sure you want to [red bold]delete[/] your vault?",
+                        choices=["yes", "no"],
+                    )
+                    if response == "yes":
+                        shutil.rmtree(vault_path / "books")
+                        shutil.rmtree(vault_path / "papers")
+                        shutil.rmtree(vault_path / "index")
+                        #    (vault_path / "vault.db").unlink()
+                        console.print("Vault has been deleted!")
+                        return
+                case ["help"]:
+                    console.print("Commands:")
+                    console.print("    [blue]help[/]\t\tList all the commands available")
+                    console.print("    [blue]quit[/]\t\tQuit the console")
+                    console.print("    [blue]add <file path>[/]\tAdd the file into the vault")
+                    console.print(
+                        "    [blue]remove <file path>[/]\tRemove the pdf file from the vault."
+                    )
+                    console.print("The file path must be the relative path from the vault")
+                    console.print(
+                        "    [blue]search <query>[/]\tSearch the vault for matching files"
+                    )
+                    console.print("    [blue]nuke[/]\t\tDelete all files and index inside the vault")
                 case ["quit"]:
                     return
                 case _:
