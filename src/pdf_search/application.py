@@ -1,21 +1,21 @@
 import argparse
-from datetime import datetime
 import pathlib
-import shutil
+import msvcrt
 from typing import List
+import webbrowser
 
-from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
-from rich.progress import track
-import sqlitedict
-from whoosh.qparser import QueryParser
-from whoosh import index as whoosh_index
+from rich.live import Live
+from rich.layout import Layout
+from rich.table import Table
+from rich.text import Text
+from rich.panel import Panel
+from rich.columns import Columns
 
 from . import pdf
-from . import vault
-
-
-console = Console()
+from .vault import Vault
+from .console import console
 
 
 def main():
@@ -30,17 +30,8 @@ def main():
 
 
 def run_console_loop(vault_path: pathlib.Path):
-    result = vault.check_vault_status(vault_path)
-    match result:
-        case ("Ok", msg):
-            if msg:
-                console.print(msg)
-        case ("Error", msg):
-            console.print(f"Error: {msg}", style="bold red")
-            return
-    with sqlitedict.SqliteDict(
-        vault_path / "vault.db", tablename="pdfs", autocommit=True
-    ) as file_db:
+    vault = Vault(vault_path)
+    if vault.status_ok:
         while True:
             command = command_parser(console.input("> "))
             match command:
@@ -53,12 +44,23 @@ def run_console_loop(vault_path: pathlib.Path):
                                 style="bold red",
                             )
                             continue
-                        pdf_file = pdf.PdfFile(pdf_file_path)
-                        pdf_types = ("book", "paper")
+                        with Progress(
+                            TextColumn("Reading"),
+                            SpinnerColumn("line"),
+                            console=console,
+                            transient=True,
+                            refresh_per_second=10,
+                        ) as progress:
+                            progress.add_task("Reading PDF")
+                            pdf_file = pdf.PdfFile(vault, pdf_file_path)
+                        pdf_types = ("books", "papers")
                         metadata_keys = ["Author", "Title", "Year", "DOI"]
                         pdf_type = console.input(f"Type: [blue]{pdf_types}[/]: ")
-                        if pdf_type == "book":
+                        pdf_file.pdf_type = pdf_type
+                        if pdf_type == "books":
                             metadata_keys += ["Edition", "ISBN10", "ISBN13"]
+                        if pdf_type == "papers":
+                            metadata_keys += ["Journal", "Volume", "PageRange"]
                         ## TODO: Add page previewer
                         metadata = pdf_file.metadata
                         metadata_dict = {}
@@ -66,35 +68,18 @@ def run_console_loop(vault_path: pathlib.Path):
                             metadata_dict[f"/{key}"] = Prompt.ask(
                                 key, default=metadata.get(f"/{key}", "")
                             )
-                        utc_time = "+05'30"
-                        time = datetime.now().strftime(f"D\072%Y%m%d%H%M%S{utc_time}")
-                        metadata_dict["/ModDate"] = time
-                        metadata_dict["/Producer"] = "PDF Search"
                         pdf_file.update_metadata(metadata_dict)
-                        pdf_file_name = pdf_file.generate_filename()
-                        pdf_file_key = pdf_file.file_hash
-                        pdf_file_path = vault_path / f"{pdf_type}s" / pdf_file_name
-                        pdf_file.write(pdf_file_path)
-                        file_db[pdf_file_key] = {
-                            "type": pdf_type,
-                            "title": metadata_dict["/Title"],
-                            "authors": [a.strip() for a in metadata_dict["/Author"].split(",")],
-                            "year": metadata_dict["/Year"],
-                            "doi": metadata_dict["/DOI"],
-                            "edition": metadata_dict["/Edition"]
-                            if "/Edition" in metadata_dict
-                            else "",
-                            "isbn10": metadata_dict["/ISBN10"].replace("-", "")
-                            if "/ISBN10" in metadata_dict
-                            else "",
-                            "isbn13": metadata_dict["/ISBN13"].replace("-", "")
-                            if "/ISBN13" in metadata_dict
-                            else "",
-                            "filename": pdf_file_name,
-                        }
-                        progress_track = lambda it: track(it, description="Indexing...")
-                        index_path = vault_path / "index"
-                        pdf_file.write_index(pdf_file_path, index_path, progress_track)
+                        pdf_file.write_file_index()
+                        pdf_file.write_page_index()
+                        with Progress(
+                            TextColumn("Writing PDF"),
+                            SpinnerColumn("line"),
+                            console=console,
+                            transient=True,
+                            refresh_per_second=10,
+                        ) as progress:
+                            progress.add_task("Writing")
+                            pdf_file.write()
                         console.print("Added PDF file")
                     else:
                         console.print("Error: missing file path in add command", style="bold red")
@@ -104,15 +89,8 @@ def run_console_loop(vault_path: pathlib.Path):
                         pdf_file_path = vault_path / pdf_file_path
                         if pdf_file_path.exists() and pdf_file_path.is_file():
                             if pdf_file_path.is_relative_to(vault_path):
-                                pdf_file = pdf.PdfFile(pdf_file_path)
-                                pdf_file_key = pdf_file.file_hash
-                                del file_db[pdf_file_key]
-                                index_path = vault_path / "index"
-                                index = whoosh_index.open_dir(index_path, "pages")
-                                index_writer = index.writer()
-                                index_writer.delete_by_term("file_key", pdf_file.file_hash)
-                                index_writer.commit()
-                                index.close()
+                                pdf_file = pdf.PdfFile(vault, pdf_file_path)
+                                pdf_file.remove_file_index()
                                 pdf_file_path.unlink()
                                 console.print(f"Deleted file {pdf_file_path.as_posix()}")
                             else:
@@ -125,28 +103,93 @@ def run_console_loop(vault_path: pathlib.Path):
                         )
                 case ["search", *rest]:
                     if rest:
-                        search_query = " ".join(rest)
-                        index_path = vault_path / "index"
-                        index = whoosh_index.open_dir(index_path, "pages")
-                        qp = QueryParser("text", schema=index.schema)
-                        q = qp.parse(search_query)
-                        with index.searcher() as s:
-                            results = s.search(q)
-                            for page in results:
-                                console.print(page["url"], style="underline blue")
-                        index.close()
+                        query_str = " ".join(rest)
+                        pages = vault.search_pages(query_str, limit=15)
+                        length = len(pages)
+                        selected = 0
+                        with Live(
+                            search_panel(pages, selected), transient=True, auto_refresh=False
+                        ) as live:
+                            while True:
+                                live.update(search_panel(pages, selected), refresh=True)
+                                key = msvcrt.getch()
+                                match key:
+                                    case b"q":
+                                        break
+                                    case b"j":
+                                        if length:
+                                            selected = (selected + 1) % length
+                                    case b"k":
+                                        if length:
+                                            selected = (selected - 1) % length
+                                    case b"o":
+                                        if length:
+                                            browser = webbrowser.get()
+                                            url = pages[selected]["url"]
+                                            browser.open(url)
+                                    case _:
+                                        continue
                     else:
                         console.print("Error: missing search query", style="bold red")
+                case ["browse"]:
+                    results = vault.list_all_files()
+                    types = list(results.keys())
+                    t_len = len(types)
+                    t_idx = 0
+                    lens = {i: len(v) for i, v in enumerate(results.values())}
+                    idxs = {t: 0 for t in range(t_len)}
+                    if not results:
+                        console.print("No files found! Add PDF file using the `add` command.")
+                        continue
+                    with Live(
+                        browse_panel(
+                            results[types[t_idx]],
+                            types[t_idx],
+                            idxs[t_idx],
+                        ),
+                        transient=True,
+                        auto_refresh=False,
+                    ) as live:
+                        while True:
+                            live.update(
+                                browse_panel(
+                                    results[types[t_idx]],
+                                    types[t_idx],
+                                    idxs[t_idx],
+                                ),
+                                refresh=True,
+                            )
+                            key = msvcrt.getch()
+                            match key:
+                                case b"q":
+                                    break
+                                case b"j":
+                                    if lens[t_idx]:
+                                        idxs[t_idx] = (idxs[t_idx] + 1) % lens[t_idx]
+                                case b"k":
+                                    if lens[t_idx]:
+                                        idxs[t_idx] = (idxs[t_idx] - 1) % lens[t_idx]
+                                case b"h":
+                                    if t_len:
+                                        t_idx = (t_idx - 1) % t_len
+                                case b"l":
+                                    if t_len:
+                                        t_idx = (t_idx + 1) % t_len
+                                case b"o":
+                                    if lens[t_idx]:
+                                        filename = results[types[t_idx]][idxs[t_idx]]["filename"]
+                                        browser = webbrowser.get()
+                                        url = vault.get_pdf_url(types[t_idx], filename)
+                                        browser.open(url)
+                                case _:
+                                    continue
                 case ["nuke"]:
                     response = Prompt.ask(
                         "Are you sure you want to [red bold]delete[/] your vault?",
                         choices=["yes", "no"],
                     )
                     if response == "yes":
-                        shutil.rmtree(vault_path / "books")
-                        shutil.rmtree(vault_path / "papers")
-                        shutil.rmtree(vault_path / "index")
-                        #    (vault_path / "vault.db").unlink()
+                        vault.nuke()
                         console.print("Vault has been deleted!")
                         return
                 case ["help"]:
@@ -161,13 +204,13 @@ def run_console_loop(vault_path: pathlib.Path):
                     console.print(
                         "    [blue]search <query>[/]\tSearch the vault for matching files"
                     )
-                    console.print("    [blue]nuke[/]\t\tDelete all files and index inside the vault")
+                    console.print(
+                        "    [blue]nuke[/]\t\tDelete all files and index inside the vault"
+                    )
                 case ["quit"]:
                     return
                 case _:
                     console.print(f"Error: invalid command {command}", style="bold red")
-
-
 
 
 def command_parser(input_str: str) -> List[str]:
@@ -188,3 +231,50 @@ def command_parser(input_str: str) -> List[str]:
             else:
                 args[-1] += c
     return args
+
+
+def search_panel(pages, selected):
+    display = Layout()
+    if pages:
+        pages_table = Table()
+        pages_table.add_column("Page")
+        pages_table.add_column("Type")
+        pages_table.add_column("File")
+        for i, page in enumerate(pages):
+            style = "blue" if i == selected else ""
+            pages_table.add_row(
+                str(page["page_number"]), page["pdf_type"], page["filename"], style=style
+            )
+    else:
+        pages_table = Text("No pages found!")
+    action_panel = Panel(f"j: down\nk: up\no: open file\nq: quit", title="Actions")
+    pages_panel = Panel(pages_table, title="Pages")
+    action_layout = Layout(action_panel, ratio=1)
+    pages_layout = Layout(pages_panel, ratio=5)
+    display.split_row(action_layout, pages_layout)
+    return display
+
+
+def browse_panel(files, pdf_type, selected_idx):
+    display = Layout()
+    if files:
+        files_table = Table()
+        files_table.add_column(pdf_type)
+        for i, file in enumerate(files):
+            style = "blue" if i == selected_idx else ""
+            files_table.add_row(file["filename"], style=style)
+    else:
+        files_table = Text("No files found!")
+    action_panel = Panel(
+        "j: down\nk: up\nh: prev type\nl: next type\no: open file\nq: quit",
+        title="Actions",
+    )
+    details = [f"{k}: {v}" for k, v in files[selected_idx].items()]
+    details_rows = Columns(details, equal=True, expand=False)
+    details_panel = Panel(details_rows, title="Details", expand=False)
+    files_panel = Panel(files_table, title="Files")
+    action_layout = Layout(action_panel, ratio=1)
+    files_layout = Layout(files_panel, ratio=4)
+    details_layout = Layout(details_panel, ratio=2)
+    display.split_row(action_layout, files_layout, details_layout)
+    return display
