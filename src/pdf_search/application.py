@@ -196,16 +196,19 @@ def run_console_loop(vault_path: pathlib.Path):
                     console.print("Commands:")
                     console.print("    [blue]help[/]\t\tList all the commands available")
                     console.print("    [blue]quit[/]\t\tQuit the console")
-                    console.print("    [blue]add <file path>[/]\tAdd the file into the vault")
+                    console.print("    [blue]add <file>[/]\t\tAdd the pdf file into the vault")
                     console.print(
-                        "    [blue]remove <file path>[/]\tRemove the pdf file from the vault."
+                        "    [blue]remove <file>[/]\tRemove the pdf file from the vault"
                     )
-                    console.print("The file path must be the relative path from the vault")
+                    console.print("\t\t\tThe file path must be the relative path from the vault")
                     console.print(
                         "    [blue]search <query>[/]\tSearch the vault for matching files"
                     )
                     console.print(
                         "    [blue]nuke[/]\t\tDelete all files and index inside the vault"
+                    )
+                    console.print(
+                        "    [blue]browse[/]\t\tBrowse through the files in the vault"
                     )
                 case ["quit"]:
                     return
@@ -269,7 +272,7 @@ def browse_panel(files, pdf_type, selected_idx):
         "j: down\nk: up\nh: prev type\nl: next type\no: open file\nq: quit",
         title="Actions",
     )
-    details = [f"{k}: {v}" for k, v in files[selected_idx].items()]
+    details = [f"[bold]{k}[/]: {v}" for k, v in files[selected_idx].items()]
     details_rows = Columns(details, equal=True, expand=False)
     details_panel = Panel(details_rows, title="Details", expand=False)
     files_panel = Panel(files_table, title="Files")
