@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from rich.progress import track
 from whoosh import fields as f
-from whoosh.analysis import StemmingAnalyzer
+from whoosh.analysis import StandardAnalyzer
 from whoosh.qparser import QueryParser
 from whoosh import index
 
@@ -36,7 +36,7 @@ class Vault:
             index_path.mkdir()
             pages_schema = f.Schema(
                 id=f.ID(stored=True, unique=True),
-                text=f.TEXT(analyzer=StemmingAnalyzer()),
+                text=f.TEXT(analyzer=StandardAnalyzer()),
                 url=f.STORED,
                 page_number=f.NUMERIC(stored=True),
                 file_id=f.ID(stored=True),
@@ -44,7 +44,7 @@ class Vault:
             files_schema = f.Schema(
                 id=f.ID(stored=True, unique=True),
                 type=f.ID(stored=True),
-                title=f.TEXT(stored=True, analyzer=StemmingAnalyzer()),
+                title=f.TEXT(stored=True, analyzer=StandardAnalyzer()),
                 authors=f.IDLIST(stored=True),
                 year=f.ID(stored=True),
                 doi=f.ID(stored=True),
