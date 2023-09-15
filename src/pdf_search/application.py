@@ -113,106 +113,12 @@ def run_console_loop(vault_path: pathlib.Path):
                     if rest:
                         query_str = " ".join(rest)
                         pages = vault.search_pages(query_str, limit=100)
-                        length = len(pages)
-                        selected = 0
-                        page_len = 10
-                        page = 0
-                        page_count = math.floor(length / page_len)
-                        start = page * page_len
-                        end = (page + 1) * page_len
-                        with Live(
-                            search_panel(pages[start:end], selected, page, page_count),
-                            transient=True,
-                            auto_refresh=False,
-                        ) as live:
-                            while True:
-                                live.update(
-                                    search_panel(pages[start:end], selected, page, page_count),
-                                    refresh=True,
-                                )
-                                key = msvcrt.getch()
-                                match key:
-                                    case b"q":
-                                        break
-                                    case b"j":
-                                        if length:
-                                            selected = (selected + 1) % page_len
-                                    case b"k":
-                                        if length:
-                                            selected = (selected - 1) % page_len
-                                    case b"h":
-                                        if length:
-                                            page = (page - 1) % page_count
-                                            start = page * page_len
-                                            end = (page + 1) * page_len
-                                            selected = 0
-                                    case b"l":
-                                        if length:
-                                            page = (page + 1) % page_count
-                                            start = page * page_len
-                                            end = (page + 1) * page_len
-                                            selected = 0
-                                    case b"o":
-                                        if length:
-                                            browser = webbrowser.get()
-                                            url = pages[start:end][selected]["url"]
-                                            browser.open(url)
-                                    case _:
-                                        continue
+                        console_loop_search_panel(pages)
                     else:
                         console.print("Error: missing search query", style="bold red")
                 case ["browse"]:
-                    results = vault.list_all_files()
-                    types = list(results.keys())
-                    t_len = len(types)
-                    t_idx = 0
-                    lens = {i: len(v) for i, v in enumerate(results.values())}
-                    idxs = {t: 0 for t in range(t_len)}
-                    if not results:
-                        console.print("No files found! Add PDF file using the `add` command.")
-                        continue
-                    with Live(
-                        browse_panel(
-                            results[types[t_idx]],
-                            types[t_idx],
-                            idxs[t_idx],
-                        ),
-                        transient=True,
-                        auto_refresh=False,
-                    ) as live:
-                        while True:
-                            live.update(
-                                browse_panel(
-                                    results[types[t_idx]],
-                                    types[t_idx],
-                                    idxs[t_idx],
-                                ),
-                                refresh=True,
-                            )
-                            key = msvcrt.getch()
-                            match key:
-                                case b"q":
-                                    break
-                                case b"j":
-                                    if lens[t_idx]:
-                                        idxs[t_idx] = (idxs[t_idx] + 1) % lens[t_idx]
-                                case b"k":
-                                    if lens[t_idx]:
-                                        idxs[t_idx] = (idxs[t_idx] - 1) % lens[t_idx]
-                                case b"h":
-                                    if t_len:
-                                        t_idx = (t_idx - 1) % t_len
-                                case b"l":
-                                    if t_len:
-                                        t_idx = (t_idx + 1) % t_len
-                                case b"o":
-                                    if lens[t_idx]:
-                                        filename = results[types[t_idx]][idxs[t_idx]]["filename"]
-                                        browser = webbrowser.get()
-                                        url = vault.get_pdf_url(types[t_idx], filename)
-                                        browser.open(url)
-                                case _:
-                                    continue
+                    files = vault.list_all_files()
+                    console_loop_browse_panel(files, vault.get_pdf_url)
                 case ["import", *rest]:
                     if rest:
                         import_dir_path = pathlib.Path(rest[0])
@@ -288,7 +194,9 @@ def search_panel(pages, selected, page, page_count):
             )
     else:
         pages_table = Text("No pages found!")
-    action_panel = Panel(f"j: down\nk: up\nh: prev page\nn: next page\no: open file\nq: quit", title="Actions")
+    action_panel = Panel(
+        f"j: down\nk: up\nh: prev page\nn: next page\no: open file\nq: quit", title="Actions"
+    )
     pages_panel = Panel(pages_table, title="Pages")
     action_layout = Layout(action_panel, ratio=1)
     pages_layout = Layout(pages_panel, ratio=5)
@@ -366,7 +274,7 @@ def import_pdf_files(vault, import_dir_path):
             if filename not in missing_pdfs:
                 pdf_file_path = pdf_dir_path / f"{filename}.pdf"
                 with Progress(
-                    TextColumn(f"[green][{idx}/{tot}][/] [blue]Reading[/] {filename[:40]}..."),
+                    TextColumn(f"[green][{idx}/{tot}][/] [blue]Reading -[/] {filename[:40]}..."),
                     SpinnerColumn("line"),
                     console=console,
                     transient=True,
@@ -407,3 +315,105 @@ def import_pdf_files(vault, import_dir_path):
         except Exception as e:
             errors[filename] = e
     return tot, errors
+
+
+def console_loop_search_panel(pages):
+    length = len(pages)
+    selected = 0
+    page_len = 10
+    page = 0
+    page_count = math.floor(length / page_len)
+    start = page * page_len
+    end = (page + 1) * page_len
+    with Live(
+        search_panel(pages[start:end], selected, page, page_count),
+        transient=True,
+        auto_refresh=False,
+    ) as live:
+        while True:
+            live.update(
+                search_panel(pages[start:end], selected, page, page_count),
+                refresh=True,
+            )
+            key = msvcrt.getch()
+            match key:
+                case b"q":
+                    break
+                case b"j":
+                    if length:
+                        selected = (selected + 1) % page_len
+                case b"k":
+                    if length:
+                        selected = (selected - 1) % page_len
+                case b"h":
+                    if length:
+                        page = (page - 1) % page_count
+                        start = page * page_len
+                        end = (page + 1) * page_len
+                        selected = 0
+                case b"l":
+                    if length:
+                        page = (page + 1) % page_count
+                        start = page * page_len
+                        end = (page + 1) * page_len
+                        selected = 0
+                case b"o":
+                    if length:
+                        browser = webbrowser.get()
+                        url = pages[start:end][selected]["url"]
+                        browser.open(url)
+                case _:
+                    continue
+
+
+def console_loop_browse_panel(files, get_pdf_url):
+    types = list(files.keys())
+    t_len = len(types)
+    t_idx = 0
+    lens = {i: len(v) for i, v in enumerate(files.values())}
+    idxs = {t: 0 for t in range(t_len)}
+    if not files:
+        console.print("No files found! Add PDF file using the `add` command.")
+        return
+    with Live(
+        browse_panel(
+            files[types[t_idx]],
+            types[t_idx],
+            idxs[t_idx],
+        ),
+        transient=True,
+        auto_refresh=False,
+    ) as live:
+        while True:
+            live.update(
+                browse_panel(
+                    files[types[t_idx]],
+                    types[t_idx],
+                    idxs[t_idx],
+                ),
+                refresh=True,
+            )
+            key = msvcrt.getch()
+            match key:
+                case b"q":
+                    break
+                case b"j":
+                    if lens[t_idx]:
+                        idxs[t_idx] = (idxs[t_idx] + 1) % lens[t_idx]
+                case b"k":
+                    if lens[t_idx]:
+                        idxs[t_idx] = (idxs[t_idx] - 1) % lens[t_idx]
+                case b"h":
+                    if t_len:
+                        t_idx = (t_idx - 1) % t_len
+                case b"l":
+                    if t_len:
+                        t_idx = (t_idx + 1) % t_len
+                case b"o":
+                    if lens[t_idx]:
+                        filename = files[types[t_idx]][idxs[t_idx]]["filename"]
+                        browser = webbrowser.get()
+                        url = get_pdf_url(types[t_idx], filename)
+                        browser.open(url)
+                case _:
+                    continue
