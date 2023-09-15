@@ -1,5 +1,6 @@
 import argparse
 import pathlib
+import math
 import msvcrt
 import os
 from typing import List
@@ -108,28 +109,50 @@ def run_console_loop(vault_path: pathlib.Path):
                 case ["search", *rest]:
                     if rest:
                         query_str = " ".join(rest)
-                        pages = vault.search_pages(query_str, limit=15)
+                        pages = vault.search_pages(query_str, limit=100)
                         length = len(pages)
                         selected = 0
+                        page_len = 10
+                        page = 0
+                        page_count = math.floor(length / page_len)
+                        start = page * page_len
+                        end = (page + 1) * page_len
                         with Live(
-                            search_panel(pages, selected), transient=True, auto_refresh=False
+                            search_panel(pages[start:end], selected, page, page_count),
+                            transient=True,
+                            auto_refresh=False,
                         ) as live:
                             while True:
-                                live.update(search_panel(pages, selected), refresh=True)
+                                live.update(
+                                    search_panel(pages[start:end], selected, page, page_count),
+                                    refresh=True,
+                                )
                                 key = msvcrt.getch()
                                 match key:
                                     case b"q":
                                         break
                                     case b"j":
                                         if length:
-                                            selected = (selected + 1) % length
+                                            selected = (selected + 1) % page_len
                                     case b"k":
                                         if length:
-                                            selected = (selected - 1) % length
+                                            selected = (selected - 1) % page_len
+                                    case b"h":
+                                        if length:
+                                            page = (page - 1) % page_count
+                                            start = page * page_len
+                                            end = (page + 1) * page_len
+                                            selected = 0
+                                    case b"l":
+                                        if length:
+                                            page = (page + 1) % page_count
+                                            start = page * page_len
+                                            end = (page + 1) * page_len
+                                            selected = 0
                                     case b"o":
                                         if length:
                                             browser = webbrowser.get()
-                                            url = pages[selected]["url"]
+                                            url = pages[start:end][selected]["url"]
                                             browser.open(url)
                                     case _:
                                         continue
@@ -248,13 +271,13 @@ def command_parser(input_str: str) -> List[str]:
     return args
 
 
-def search_panel(pages, selected):
+def search_panel(pages, selected, page, page_count):
     display = Layout()
     if pages:
         pages_table = Table()
         pages_table.add_column("Page")
         pages_table.add_column("Type")
-        pages_table.add_column("File")
+        pages_table.add_column(f"File [{page + 1}/{page_count}]")
         for i, page in enumerate(pages):
             style = "blue" if i == selected else ""
             pages_table.add_row(
@@ -262,7 +285,7 @@ def search_panel(pages, selected):
             )
     else:
         pages_table = Text("No pages found!")
-    action_panel = Panel(f"j: down\nk: up\no: open file\nq: quit", title="Actions")
+    action_panel = Panel(f"j: down\nk: up\nh: prev page\nn: next page\no: open file\nq: quit", title="Actions")
     pages_panel = Panel(pages_table, title="Pages")
     action_layout = Layout(action_panel, ratio=1)
     pages_layout = Layout(pages_panel, ratio=5)
