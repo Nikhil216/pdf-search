@@ -9,12 +9,20 @@ authors = [
   { name="Nikhil Devadiga", email="nmdevadiga216@gmail.com"},
 ]
 description = "A console application to search through a folder of pdf files using fuzzy keyword search"
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+]
+dependencies = [
+  "polars >= 0.19, < 1",
+  "whoosh == 2.7.4",
+  "rich >= 13.5, < 14",
+  "pypdf >= 3.15, < 4",
+  "xlsx2csv >= 0.8, < 1",
 ]
 
 [tool.hatch.version]
