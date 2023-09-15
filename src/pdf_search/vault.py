@@ -2,20 +2,25 @@ import pathlib
 import shutil
 from urllib.parse import quote
 
-from rich.progress import track
 from whoosh import fields as f
 from whoosh.analysis import StandardAnalyzer
 from whoosh.qparser import QueryParser
+from whoosh.query import Every
 from whoosh import index
 
 from .console import console
+
+PDF_TYPES = ["books", "papers", "thesis"]
+
 
 def check_status_ok(method):
     def modified_method(self, *args, **kwargs):
         if not self.status_ok:
             raise Exception("Vault has failed to load! Run the method `load_vault`.")
         return method(self, *args, **kwargs)
+
     return modified_method
+
 
 class Vault:
     def __init__(self, vault_path: str | pathlib.Path):
@@ -28,8 +33,6 @@ class Vault:
         if not self.vault_path.exists() or not self.vault_path.is_dir():
             console.print("Error: The vault directory does not exists", style="bold red")
             return False
-        books_path = self.vault_path / "books"
-        papers_path = self.vault_path / "papers"
         index_path = self.vault_path / "index"
         created = []
         if not index_path.exists() or not index_path.is_dir():
@@ -49,19 +52,22 @@ class Vault:
                 year=f.ID(stored=True),
                 doi=f.ID(stored=True),
                 edition=f.STORED,
-                isbn10=f.ID(stored=True, unique=True),
-                isbn13=f.ID(stored=True, unique=True),
+                isbn10=f.ID(stored=True),
+                isbn13=f.ID(stored=True),
+                journal=f.ID(stored=True),
+                volume=f.ID(stored=True),
+                pages=f.ID(stored=True),
+                keywords=f.KEYWORD(stored=True, commas=True),
                 filename=f.ID(stored=True),
             )
             index.create_in(index_path, pages_schema, "pages")
             index.create_in(index_path, files_schema, "files")
             created.append("index")
-        if not books_path.exists() or not books_path.is_dir():
-            books_path.mkdir()
-            created.append("books")
-        if not papers_path.exists() or not papers_path.is_dir():
-            papers_path.mkdir()
-            created.append("papers")
+        for pdf_type in PDF_TYPES:
+            type_path = self.vault_path / pdf_type
+            if not type_path.exists() or not type_path.is_dir():
+                type_path.mkdir()
+                created.append(pdf_type)
         ## TODO: Check for missing pdf files
         if created:
             console.print(f'Created {", ".join(created)}')
@@ -76,7 +82,7 @@ class Vault:
             self.file_index = index.open_dir(index_path, "files")
         if not self.page_index:
             self.page_index = index.open_dir(index_path, "pages")
-        
+
     @check_status_ok
     def write_file_index(self, fields):
         field_names = self.file_index.schema.names()
@@ -88,9 +94,9 @@ class Vault:
         file_writer.commit()
 
     @check_status_ok
-    def write_multiple_page_index(self, pages):
+    def write_multiple_page_index(self, pages, track=lambda x: x):
         page_writer = self.page_index.writer()
-        for page_fields in track(pages, "Indexing"):
+        for page_fields in track(pages):
             page_writer.add_document(**page_fields)
         page_writer.commit()
 
@@ -164,7 +170,7 @@ class Vault:
 
     @check_status_ok
     def list_all_files(self):
-        file_title_query = QueryParser("type", self.file_index.schema).parse("books OR papers")
+        file_title_query = Every()
         results = {}
         with self.file_index.searcher() as s:
             files = s.search(file_title_query)
@@ -176,6 +182,6 @@ class Vault:
         return results
 
     def nuke(self):
-        shutil.rmtree(self.vault_path / "books")
-        shutil.rmtree(self.vault_path / "papers")
         shutil.rmtree(self.vault_path / "index")
+        for pdf_type in PDF_TYPES:
+            shutil.rmtree(self.vault_path / pdf_type)

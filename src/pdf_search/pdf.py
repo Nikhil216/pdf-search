@@ -4,7 +4,6 @@ import pathlib
 import re
 from urllib.parse import quote
 
-from rich.progress import track
 import pypdf
 
 from .vault import Vault
@@ -36,13 +35,18 @@ class PdfFile:
     def generate_filename(self):
         author_names_list = [
             [name for name in a.strip().split(" ") if not name.endswith(".")]
-            for a in self.metadata["/Author"].split(",")
+            for a in self.metadata["/Authors"].split(",")
         ]
-        authors_str = ", ".join([f"{names[0][0]}. {names[-1]}" for names in author_names_list])
+        authors_str = ", ".join(
+            [
+                f"{(names[0][0] if names[0] else '') if names else ''}. {names[-1] if names else ''}"
+                for names in author_names_list
+            ]
+        )
         valid_title = re.sub(r"\*\?\\\\/", "", self.metadata["/Title"])
         valid_title = re.sub(r':<>\|"-', " ", valid_title)
         year = self.metadata["/Year"]
-        edition = f"[{self.metadata['/Edition']}] " if "/Edition" in self.metadata else ""
+        edition = f"[{self.metadata['/Edition']}] " if self.metadata.get("/Edition", "") else ""
         return f"{authors_str} - {valid_title} {edition}({year}).pdf"
 
     def write(self, file_path=None):
@@ -51,9 +55,9 @@ class PdfFile:
             file_path = self.vault.get_pdf_filepath(self.pdf_type, filename)
         self.writer.write(file_path)
 
-    def write_page_index(self):
+    def write_page_index(self, track_hashing=lambda x: x, track_indexing=lambda x: x):
         pages = []
-        for page in track(self.reader.pages, "Hashing"):
+        for page in track_hashing(self.reader.pages):
             page_key = page.hash_func(page.hash_value_data()).hexdigest()
             page_text = page.extract_text()
             file_path_encoded = quote(self.file_path.resolve().as_posix())
@@ -67,7 +71,7 @@ class PdfFile:
                     "page_number": page.page_number + 1,
                 }
             )
-        self.vault.write_multiple_page_index(pages)
+        self.vault.write_multiple_page_index(pages, track_indexing)
 
     def write_file_index(self):
         pdf_file_name = self.generate_filename()
@@ -75,16 +79,19 @@ class PdfFile:
             "id": self.file_hash,
             "type": self.pdf_type,
             "title": self.metadata["/Title"],
-            "authors": self.metadata["/Author"],
+            "authors": self.metadata["/Authors"],
             "year": self.metadata["/Year"],
-            "doi": self.metadata["/DOI"],
-            "edition": self.metadata["/Edition"] if "/Edition" in self.metadata else "",
+            "doi": self.metadata["/DOI"] if self.metadata.get("/DOI", "") else "",
+            "edition": self.metadata["/Edition"] if self.metadata.get("/Edition", "") else "",
             "isbn10": self.metadata["/ISBN10"].replace("-", "")
-            if "/ISBN10" in self.metadata
+            if self.metadata.get("/ISNB10", "")
             else "",
             "isbn13": self.metadata["/ISBN13"].replace("-", "")
-            if "/ISBN13" in self.metadata
+            if self.metadata.get("/ISNB13", "")
             else "",
+            "journal": self.metadata["/Journal"] if self.metadata.get("/Journal", "") else "",
+            "volume": self.metadata["/Volume"] if self.metadata.get("/Volume", "") else "",
+            "pages": self.metadata["/Pages"] if self.metadata.get("/Pages", "") else "",
             "filename": pdf_file_name,
         }
         self.vault.write_file_index(fields)
