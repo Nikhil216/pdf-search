@@ -259,12 +259,12 @@ def import_pdf_files(vault, import_dir_path):
     if missing_pdfs:
         console.print(f"Warning: Found {len(missing_pdfs)} missing pdf files", style="yellow")
         for idx, pdf_filename in enumerate(missing_pdfs):
-            console.print(f"{idx:6}. {pdf_filename}")
+            console.print(f"{idx + 1:6}. {pdf_filename}")
     missing_details = details_filenames - files_filenames
     if missing_details:
         console.print(f"Warning: Found {len(missing_details)} missing details", style="yellow")
         for idx, pdf_filename in enumerate(missing_details):
-            console.print(f"{idx:6}. {pdf_filename}")
+            console.print(f"{idx + 1:6}. {pdf_filename}")
     rows = df.rows(named=True)
     tot = len(rows)
     errors = {}
