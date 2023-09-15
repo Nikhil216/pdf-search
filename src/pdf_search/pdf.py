@@ -19,7 +19,9 @@ class PdfFile:
         self.writer = pypdf.PdfWriter(file_path)
         self.writer.clone_document_from_reader(self.reader)
         self.metadata = dict(self.reader.metadata)
-        self.file_hash = hashlib.sha1(self.reader.pages[0].hash_value_data()).hexdigest()
+        self.file_hash = hashlib.sha1(
+            b"".join(map(lambda x: x.encode(), self.reader.page_labels))
+        ).hexdigest()
         self.pdf_type = None
 
     def read_metadata(self) -> pypdf.PdfReader.metadata:
@@ -97,4 +99,4 @@ class PdfFile:
         self.vault.write_file_index(fields)
 
     def remove_file_index(self):
-        self.vault.remove_file_index(self.file_hash)
+        return self.vault.remove_file_index(self.file_hash)

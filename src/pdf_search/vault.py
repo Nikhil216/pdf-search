@@ -120,11 +120,12 @@ class Vault:
     @check_status_ok
     def remove_file_index(self, file_id):
         page_writer = self.page_index.writer()
-        page_writer.delete_by_term("file_id", file_id)
+        pages_deleted = page_writer.delete_by_term("file_id", file_id)
         page_writer.commit()
         file_writer = self.file_index.writer()
-        file_writer.delete_by_term("id", file_id)
+        files_deleted = file_writer.delete_by_term("id", file_id)
         file_writer.commit()
+        return files_deleted, pages_deleted
 
     @check_status_ok
     def search_pages(self, search_query_str, limit=10):

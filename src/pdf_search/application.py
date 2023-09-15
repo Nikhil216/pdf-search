@@ -95,9 +95,12 @@ def run_console_loop(vault_path: pathlib.Path):
                         if pdf_file_path.exists() and pdf_file_path.is_file():
                             if pdf_file_path.is_relative_to(vault_path):
                                 pdf_file = pdf.PdfFile(vault, pdf_file_path)
-                                pdf_file.remove_file_index()
+                                files_deleted, pages_deleted = pdf_file.remove_file_index()
                                 pdf_file_path.unlink()
-                                console.print(f"Deleted file {pdf_file_path.as_posix()}")
+                                console.print(
+                                    f"Deleted file {pdf_file_path.as_posix()},"
+                                    f" {files_deleted} file index and {pages_deleted} pages index"
+                                )
                             else:
                                 console.print("Error: The given path is not in the vault")
                         else:
