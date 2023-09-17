@@ -23,6 +23,8 @@ dependencies = [
   "rich >= 13.5, < 14",
   "pypdf >= 3.15, < 4",
   "xlsx2csv >= 0.8, < 1",
+  "python-doctr >= 0.7.0, < 1",
+  "torch >= 2.0.0, < 3"  
 ]
 
 [tool.hatch.version]

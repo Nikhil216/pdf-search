@@ -4,6 +4,8 @@ import pathlib
 import re
 from urllib.parse import quote
 
+from doctr.io import DocumentFile
+from doctr.models import ocr_predictor
 import pypdf
 
 from .vault import Vault
@@ -23,6 +25,7 @@ class PdfFile:
             b"".join(map(lambda x: x.encode(), self.reader.page_labels))
         ).hexdigest()
         self.pdf_type = None
+        self.ocr_model = ocr_predictor(pretrained=True)
 
     def read_metadata(self) -> pypdf.PdfReader.metadata:
         return self.metadata
@@ -64,10 +67,16 @@ class PdfFile:
             page_text = page.extract_text()
             file_path_encoded = quote(self.file_path.resolve().as_posix())
             page_url = f"file:///{file_path_encoded}#page={page.page_number + 1}"
+            ## OCR predictions of images
+            image_files = page.images
+            image_bytes = [img.data for img in image_files]
+            image_doc = DocumentFile.from_images(image_bytes)
+            model_result = self.ocr_model(image_doc)
+            image_text = model_result.render()
             pages.append(
                 {
                     "id": page_key,
-                    "text": page_text,
+                    "text": "\n".join([page_text, image_text]),
                     "url": page_url,
                     "file_id": self.file_hash,
                     "page_number": page.page_number + 1,
