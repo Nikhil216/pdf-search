@@ -3,6 +3,7 @@ import pathlib
 import math
 import msvcrt
 import os
+import time
 from typing import List
 import webbrowser
 
@@ -122,8 +123,10 @@ def run_console_loop(vault_path: pathlib.Path):
                 case ["import", *rest]:
                     if rest:
                         import_dir_path = pathlib.Path(rest[0])
+                        start_time = time.time()
                         total, errors = import_pdf_files(vault, import_dir_path)
-                        console.print(f"Imported {total - len(errors)}/{total} PDF files")
+                        duration = (time.time() - start_time) // 60 ## minutes
+                        console.print(f"Imported {total - len(errors)}/{total} PDF files in {duration} min")
                         if errors:
                             console.print("Import Errors:", style="red bold")
                             for filename, error in errors.items():
