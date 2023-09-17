@@ -2,7 +2,6 @@ from datetime import datetime
 import hashlib
 import pathlib
 import re
-from urllib.parse import quote
 
 from doctr.io import DocumentFile
 from doctr.models import ocr_predictor
@@ -48,11 +47,12 @@ class PdfFile:
                 for names in author_names_list
             ]
         )
+        authors_str = f"{authors_str} - " if authors_str else ""
         valid_title = re.sub(r"\*\?\\\\/", "", self.metadata["/Title"])
         valid_title = re.sub(r':<>\|"-', " ", valid_title)
-        year = self.metadata["/Year"]
         edition = f"[{self.metadata['/Edition']}] " if self.metadata.get("/Edition", "") else ""
-        return f"{authors_str} - {valid_title} {edition}({year}).pdf"
+        year = f"({self.metadata['/Year']})" if self.metadata.get("/Year", "") else ""
+        return f"{authors_str}{valid_title} {edition}{year}.pdf"
 
     def write(self, file_path=None):
         if file_path is None:
@@ -65,8 +65,6 @@ class PdfFile:
         for page in track_hashing(self.reader.pages):
             page_key = page.hash_func(page.hash_value_data()).hexdigest()
             page_text = page.extract_text()
-            file_path_encoded = quote(self.file_path.resolve().as_posix())
-            page_url = f"file:///{file_path_encoded}#page={page.page_number + 1}"
             ## OCR predictions of images
             image_files = page.images
             image_bytes = [img.data for img in image_files]
@@ -77,8 +75,9 @@ class PdfFile:
                 {
                     "id": page_key,
                     "text": "\n".join([page_text, image_text]),
-                    "url": page_url,
                     "file_id": self.file_hash,
+                    "filename": self.generate_filename(),
+                    "pdf_type": self.pdf_type,
                     "page_number": page.page_number + 1,
                 }
             )

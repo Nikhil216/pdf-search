@@ -40,7 +40,8 @@ class Vault:
             pages_schema = f.Schema(
                 id=f.ID(stored=True, unique=True),
                 text=f.TEXT(analyzer=StandardAnalyzer()),
-                url=f.STORED,
+                filename=f.STORED,
+                pdf_type=f.STORED,
                 page_number=f.NUMERIC(stored=True),
                 file_id=f.ID(stored=True),
             )
@@ -101,9 +102,9 @@ class Vault:
         page_writer.commit()
 
     @check_status_ok
-    def write_page_index(self, page_id, text, url):
+    def write_page_index(self, page_id, text, pdf_type, filename):
         page_writer = self.page_index.writer()
-        page_writer.add_document(id=page_id, text=text, url=url)
+        page_writer.add_document(id=page_id, text=text, filename=filename, pdf_type=pdf_type)
         page_writer.commit()
 
     def get_pdf_url(self, pdf_type, filename) -> str:
@@ -136,9 +137,10 @@ class Vault:
             for page in pages:
                 results.append(
                     {
-                        "url": page["url"],
-                        "page_number": page["page_number"],
                         "file_id": page["file_id"],
+                        "filename": page["filename"],
+                        "pdf_type": page["pdf_type"],
+                        "page_number": page["page_number"],
                     }
                 )
         file_query_str = " OR ".join(set([page["file_id"] for page in results]))

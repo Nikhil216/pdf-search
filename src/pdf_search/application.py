@@ -113,7 +113,7 @@ def run_console_loop(vault_path: pathlib.Path):
                     if rest:
                         query_str = " ".join(rest)
                         pages = vault.search_pages(query_str, limit=100)
-                        console_loop_search_panel(pages)
+                        console_loop_search_panel(pages, vault.get_pdf_url)
                     else:
                         console.print("Error: missing search query", style="bold red")
                 case ["browse"]:
@@ -317,7 +317,7 @@ def import_pdf_files(vault, import_dir_path):
     return tot, errors
 
 
-def console_loop_search_panel(pages):
+def console_loop_search_panel(pages, get_pdf_url):
     length = len(pages)
     selected = 0
     page_len = 10
@@ -360,7 +360,11 @@ def console_loop_search_panel(pages):
                 case b"o":
                     if length:
                         browser = webbrowser.get()
-                        url = pages[start:end][selected]["url"]
+                        filename = pages[start:end][selected]["filename"]
+                        pdf_type = pages[start:end][selected]["pdf_type"]
+                        page_number = pages[start:end][selected]["page_number"]
+                        file_url = get_pdf_url(pdf_type, filename)
+                        url = f"{file_url}#page={page_number}"
                         browser.open(url)
                 case _:
                     continue
