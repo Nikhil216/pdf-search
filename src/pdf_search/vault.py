@@ -10,7 +10,7 @@ from whoosh import index
 
 from .console import console
 
-PDF_TYPES = ["books", "papers", "thesis"]
+PDF_TYPES = ["books", "papers", "thesis", "docs"]
 
 
 def check_status_ok(method):
