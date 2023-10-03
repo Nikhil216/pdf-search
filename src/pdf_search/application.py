@@ -42,51 +42,7 @@ def run_console_loop(vault_path: pathlib.Path):
                 case ["add", *rest]:
                     if rest:
                         pdf_file_path = pathlib.Path(rest[0])
-                        if not pdf_file_path.exists() or not pdf_file_path.is_file():
-                            console.print(
-                                f"Error: PDF file does not exists: {pdf_file_path}",
-                                style="bold red",
-                            )
-                            continue
-                        with Progress(
-                            TextColumn("Reading"),
-                            SpinnerColumn("line"),
-                            console=console,
-                            transient=True,
-                            refresh_per_second=10,
-                        ) as progress:
-                            progress.add_task("Reading PDF")
-                            pdf_file = pdf.PdfFile(vault, pdf_file_path)
-                        metadata_keys = ["Authors", "Title", "Year"]
-                        pdf_type = Prompt.ask("Type", console=console, choices=PDF_TYPES)
-                        pdf_file.pdf_type = pdf_type
-                        if pdf_type == "books":
-                            metadata_keys += ["Edition", "ISBN10", "ISBN13"]
-                        if pdf_type == "papers":
-                            metadata_keys += ["DOI", "Journal", "Volume", "PageRange", "Keywords"]
-                        ## TODO: Add page previewer
-                        metadata = pdf_file.metadata
-                        metadata_dict = {}
-                        for key in metadata_keys:
-                            metadata_dict[f"/{key}"] = Prompt.ask(
-                                key, default=metadata.get(f"/{key}", "")
-                            )
-                        pdf_file.update_metadata(metadata_dict)
-                        pdf_file.write_file_index()
-                        pdf_file.write_page_index(
-                            track_hashing=lambda x: track(x, "Hashing", transient=True),
-                            track_indexing=lambda x: track(x, "Indexing", transient=True),
-                        )
-                        with Progress(
-                            TextColumn("Writing PDF"),
-                            SpinnerColumn("line"),
-                            console=console,
-                            transient=True,
-                            refresh_per_second=10,
-                        ) as progress:
-                            progress.add_task("Writing")
-                            pdf_file.write()
-                        console.print("Added PDF file")
+                        console_loop_add_panel(vault, pdf_file_path)
                     else:
                         console.print("Error: missing file path in add command", style="bold red")
                 case ["remove", *rest]:
@@ -424,3 +380,54 @@ def console_loop_browse_panel(files, get_pdf_url):
                         browser.open(url)
                 case _:
                     continue
+
+def console_loop_add_panel(vault: Vault, pdf_file_path: pathlib.Path):
+    if not pdf_file_path.exists() or not pdf_file_path.is_file():
+        console.print(
+            f"Error: PDF file does not exists: {pdf_file_path}",
+            style="bold red",
+        )
+        return
+    with Progress(
+        TextColumn("Reading"),
+        SpinnerColumn("line"),
+        console=console,
+        transient=True,
+        refresh_per_second=10,
+    ) as progress:
+        progress.add_task("Reading PDF")
+        pdf_file = pdf.PdfFile(vault, pdf_file_path)
+    metadata_keys = ["Authors", "Title", "Year"]
+    pdf_type = Prompt.ask("Type", console=console, choices=PDF_TYPES)
+    pdf_file.pdf_type = pdf_type
+    if pdf_type == "books":
+        metadata_keys += ["Edition", "ISBN10", "ISBN13"]
+    if pdf_type == "papers":
+        metadata_keys += ["DOI", "Journal", "Volume", "PageRange", "Keywords"]
+    ## TODO: Add page previewer
+    metadata = pdf_file.metadata
+    metadata_dict = {}
+    for key in metadata_keys:
+        metadata_dict[f"/{key}"] = Prompt.ask(
+            key, default=metadata.get(f"/{key}", "")
+        )
+    pdf_file.update_metadata(metadata_dict)
+    pdf_file.write_file_index()
+    page_errors = pdf_file.write_page_index(
+        track_hashing=lambda x: track(x, "Hashing", transient=True),
+        track_indexing=lambda x: track(x, "Indexing", transient=True),
+    )
+    if page_errors:
+        console.print('Errors:', style='red bold')
+        for page_number, error in page_errors.items():
+            console.print(f'    {page_number:4}: {error}', style='red')
+    with Progress(
+        TextColumn("Writing PDF"),
+        SpinnerColumn("line"),
+        console=console,
+        transient=True,
+        refresh_per_second=10,
+    ) as progress:
+        progress.add_task("Writing")
+        pdf_file.write()
+    console.print("Added PDF file")
