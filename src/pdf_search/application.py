@@ -218,12 +218,12 @@ def import_pdf_files(vault, import_dir_path):
     )
     files_filenames = set(os.listdir(pdf_dir_path))
     details_filenames = set(df["Filename"].map_elements(lambda filename: f"{filename}.pdf"))
-    missing_pdfs = files_filenames - details_filenames
+    missing_pdfs = details_filenames - files_filenames
     if missing_pdfs:
         console.print(f"Warning: Found {len(missing_pdfs)} missing pdf files", style="yellow")
         for idx, pdf_filename in enumerate(missing_pdfs):
             console.print(f"{idx + 1:6}. {pdf_filename}")
-    missing_details = details_filenames - files_filenames
+    missing_details = files_filenames - details_filenames
     if missing_details:
         console.print(f"Warning: Found {len(missing_details)} missing details", style="yellow")
         for idx, pdf_filename in enumerate(missing_details):
@@ -238,7 +238,7 @@ def import_pdf_files(vault, import_dir_path):
             if filename not in missing_pdfs:
                 pdf_file_path = pdf_dir_path / f"{filename}.pdf"
                 with Progress(
-                    TextColumn(f"[green][{idx}/{tot}][/] [blue]Reading -[/] {filename[:40]}..."),
+                    TextColumn(f"[green][{idx+1}/{tot}][/] [blue]Reading -[/] {filename[:40]}..."),
                     SpinnerColumn("line"),
                     console=console,
                     transient=True,
@@ -256,13 +256,13 @@ def import_pdf_files(vault, import_dir_path):
                 page_errors = pdf_file.write_page_index(
                     track_hashing=lambda x: track(
                         x,
-                        f"[green][{idx}/{tot}][/] [blue]Hashing -[/] {filename[:40]}...",
+                        f"[green][{idx+1}/{tot}][/] [blue]Hashing -[/] {filename[:40]}...",
                         transient=True,
                         console=console,
                     ),
                     track_indexing=lambda x: track(
                         x,
-                        f"[green][{idx}/{tot}][/] [blue]Indexing -[/] {filename[:40]}...",
+                        f"[green][{idx+1}/{tot}][/] [blue]Indexing -[/] {filename[:40]}...",
                         transient=True,
                         console=console,
                     ),
@@ -270,7 +270,7 @@ def import_pdf_files(vault, import_dir_path):
                 for page_number, error in page_errors.items():
                     errors[filename].append(f'Page Error at {page_number:4}: {error}')
                 with Progress(
-                    TextColumn(f"[green][{idx}/{tot}][/] [blue]Writing -[/] {filename[:40]}..."),
+                    TextColumn(f"[green][{idx+1}/{tot}][/] [blue]Writing -[/] {filename[:40]}..."),
                     SpinnerColumn("line"),
                     console=console,
                     transient=True,
