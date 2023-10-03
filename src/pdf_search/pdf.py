@@ -48,8 +48,8 @@ class PdfFile:
             ]
         )
         authors_str = f"{authors_str} - " if authors_str else ""
-        valid_title = re.sub(r"\*\?\\\\/", "", self.metadata["/Title"])
-        valid_title = re.sub(r':<>\|"-', " ", valid_title)
+        valid_title = re.sub(r"[\*\?\\\\/]", "", self.metadata["/Title"])
+        valid_title = re.sub(r'[:<>\|"-]', " ", valid_title)
         edition = f"[{self.metadata['/Edition']}] " if self.metadata.get("/Edition", "") else ""
         year = f"({self.metadata['/Year']})" if self.metadata.get("/Year", "") else ""
         return f"{authors_str}{valid_title} {edition}{year}.pdf"
