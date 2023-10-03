@@ -62,19 +62,26 @@ class PdfFile:
 
     def write_page_index(self, track_hashing=lambda x: x, track_indexing=lambda x: x):
         pages = []
+        errors = {}
         for page in track_hashing(self.reader.pages):
-            page_key = page.hash_func(page.hash_value_data()).hexdigest()
             page_text = page.extract_text()
             ## OCR predictions of images
-            image_files = page.images
-            image_bytes = [img.data for img in image_files]
-            image_doc = DocumentFile.from_images(image_bytes)
-            model_result = self.ocr_model(image_doc)
-            image_text = model_result.render()
+            image_text = ''
+            try:
+                if page.images:
+                    image_files = page.images
+                    image_bytes = [img.data for img in image_files]
+                    image_doc = DocumentFile.from_images(image_bytes)
+                    model_result = self.ocr_model(image_doc)
+                    image_text = model_result.render()
+            except Exception as e:
+                errors[page.page_number] = e
+            page_text = "\n".join([page_text, image_text])
+            page_key = page.hash_func(page_text.encode()).hexdigest()
             pages.append(
                 {
                     "id": page_key,
-                    "text": "\n".join([page_text, image_text]),
+                    "text": page_text,
                     "file_id": self.file_hash,
                     "filename": self.generate_filename(),
                     "pdf_type": self.pdf_type,
@@ -82,6 +89,7 @@ class PdfFile:
                 }
             )
         self.vault.write_multiple_page_index(pages, track_indexing)
+        return errors
 
     def write_file_index(self):
         pdf_file_name = self.generate_filename()

@@ -81,15 +81,19 @@ def run_console_loop(vault_path: pathlib.Path):
                         import_dir_path = pathlib.Path(rest[0])
                         start_time = time.time()
                         total, errors = import_pdf_files(vault, import_dir_path)
-                        duration = (time.time() - start_time) // 60 ## minutes
-                        console.print(f"Imported {total - len(errors)}/{total} PDF files in {duration} min")
-                        if errors:
-                            console.print("Import Errors:", style="red bold")
-                            for filename, error in errors.items():
-                                console.print(f"  {filename}", style="red")
-                                console.print(f"  >>> {error}", style="red")
+                        duration = (time.time() - start_time) / 3600 ## hours
+                        import_log_path = import_dir_path / 'import_log.txt'
+                        console.print(f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours")
+                        with open(import_log_path, 'w') as f:
+                            f.write(f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours\n")
+                            if errors:
+                                f.write("Import Errors:\n")
+                                for filename, error_list in errors.items():
+                                    error_string = '\n>>> '.join([str(e) for e in error_list])
+                                    f.write(f"  {filename}\n")
+                                    f.write(f"  >>> {error_string}\n")
                     else:
-                        console.print("Error: Missing improt directory path", style="red bold")
+                        console.print("Error: Missing import directory path", style="red bold")
                 case ["nuke"]:
                     response = Prompt.ask(
                         "Are you sure you want to [red bold]delete[/] your vault?",
@@ -229,6 +233,7 @@ def import_pdf_files(vault, import_dir_path):
     errors = {}
     for idx, record in enumerate(rows):
         filename = record["Filename"]
+        errors[filename] = []
         try:
             if filename not in missing_pdfs:
                 pdf_file_path = pdf_dir_path / f"{filename}.pdf"
@@ -248,7 +253,7 @@ def import_pdf_files(vault, import_dir_path):
                 pdf_file.pdf_type = record["Type"]
                 pdf_file.update_metadata(metadata_dict)
                 pdf_file.write_file_index()
-                pdf_file.write_page_index(
+                page_errors = pdf_file.write_page_index(
                     track_hashing=lambda x: track(
                         x,
                         f"[green][{idx}/{tot}][/] [blue]Hashing -[/] {filename[:40]}...",
@@ -262,6 +267,8 @@ def import_pdf_files(vault, import_dir_path):
                         console=console,
                     ),
                 )
+                for page_number, error in page_errors.items():
+                    errors[filename].append(f'Page Error at {page_number:4}: {error}')
                 with Progress(
                     TextColumn(f"[green][{idx}/{tot}][/] [blue]Writing -[/] {filename[:40]}..."),
                     SpinnerColumn("line"),
@@ -272,7 +279,10 @@ def import_pdf_files(vault, import_dir_path):
                     progress.add_task("Writing")
                     pdf_file.write()
         except Exception as e:
-            errors[filename] = e
+            errors[filename].append(e)
+        finally:
+            if not errors[filename]:
+                del errors[filename]
     return tot, errors
 
 
