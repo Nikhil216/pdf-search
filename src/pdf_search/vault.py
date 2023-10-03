@@ -176,7 +176,7 @@ class Vault:
         file_title_query = Every()
         results = {}
         with self.file_index.searcher() as s:
-            files = s.search(file_title_query)
+            files = s.search(file_title_query, limit=1000)
             for file in files:
                 pdf_type = file["type"]
                 if pdf_type not in results:
