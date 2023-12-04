@@ -1,16 +1,48 @@
+import io
 import pathlib
 import shutil
+import tokenize
 from urllib.parse import quote
+
+import pegen.tokenizer
+import pegen.utils
 
 from whoosh import fields as f
 from whoosh.analysis import StandardAnalyzer
-from whoosh.qparser import QueryParser
+from whoosh.qparser import QueryParser, MultifieldParser
 from whoosh.query import Every
 from whoosh import index
 
 from .console import console
 
 PDF_TYPES = ["books", "papers", "thesis", "docs"]
+
+
+def build_search_query(source_string):
+    grammer = """
+    start: t=text_query? f=field_query_pair*    { [ t , *f ] if t else f }
+    text_query: query                           { ( 'text', ' '.join(query) ) }
+    field_query_pair: field ':' query           { ( field, ' '.join(query) ) }
+    query: atom+ 
+    field:
+        | 'author'                              { 'authors' }
+        | 'file'                                { 'filename' }
+        | 'type'                                { 'pdf_type' } 
+    atom:
+        | NAME                                  { name.string }
+        | NUMBER                                { number.string }
+    """
+
+    file = io.StringIO(source_string)
+    parser_class = pegen.utils.make_parser(grammer)
+    tokengen = tokenize.generate_tokens(file.readline)
+    tokenizer = pegen.tokenizer.Tokenizer(tokengen, verbose=False)
+    parser = parser_class(tokenizer, verbose=False)
+    cst = parser.start()
+    queries = []
+    for field, words in cst:
+        queries.append(f"{field}:({words})")
+    return " ".join(queries)
 
 
 def check_status_ok(method):
@@ -130,6 +162,10 @@ class Vault:
 
     @check_status_ok
     def search_pages(self, search_query_str, limit=10):
+        # query_str = build_search_query(search_query_str)
+        # page_text_query = MultifieldParser(
+        #     ["text", "filename", "pdf_type", "authors"], self.page_index.schema
+        # ).parse(query_str)
         page_text_query = QueryParser("text", self.page_index.schema).parse(search_query_str)
         results = []
         with self.page_index.searcher() as s:
