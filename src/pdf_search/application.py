@@ -86,15 +86,19 @@ def run_console_loop(vault_path: pathlib.Path):
                         import_dir_path = pathlib.Path(rest[0])
                         start_time = time.time()
                         total, errors = import_pdf_files(vault, import_dir_path)
-                        duration = (time.time() - start_time) / 3600 ## hours
-                        import_log_path = import_dir_path / 'import_log.txt'
-                        console.print(f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours")
-                        with open(import_log_path, 'w') as f:
-                            f.write(f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours\n")
+                        duration = (time.time() - start_time) / 3600  ## hours
+                        import_log_path = import_dir_path / "import_log.txt"
+                        console.print(
+                            f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours"
+                        )
+                        with open(import_log_path, "w") as f:
+                            f.write(
+                                f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours\n"
+                            )
                             if errors:
                                 f.write("Import Errors:\n")
                                 for filename, error_list in errors.items():
-                                    error_string = '\n>>> '.join([str(e) for e in error_list])
+                                    error_string = "\n>>> ".join([str(e) for e in error_list])
                                     f.write(f"  {filename}\n")
                                     f.write(f"  >>> {error_string}\n")
                     else:
@@ -148,13 +152,13 @@ def command_parser(input_str: str) -> List[str]:
     return args
 
 
-def search_panel(pages, selected, page, page_count):
+def search_panel(pages, selected, page_idx, page_count):
     display = Layout()
     if pages:
         pages_table = Table()
         pages_table.add_column("Page")
         pages_table.add_column("Type")
-        pages_table.add_column(f"File [{page + 1}/{page_count}]")
+        pages_table.add_column(f"File [{page_idx + 1}/{page_count}]")
         for i, page in enumerate(pages):
             style = "blue" if i == selected else ""
             pages_table.add_row(
@@ -172,28 +176,28 @@ def search_panel(pages, selected, page, page_count):
     return display
 
 
-def browse_panel(files, pdf_type, selected_idx):
+def browse_panel(pages, pdf_type, selected_idx, page_idx, page_count):
     display = Layout()
-    if files:
-        files_table = Table()
-        files_table.add_column(pdf_type)
-        for i, file in enumerate(files):
+    if pages:
+        pages_table = Table()
+        pages_table.add_column(f"{pdf_type} [{page_idx + 1}/{page_count}]")
+        for i, file in enumerate(pages):
             style = "blue" if i == selected_idx else ""
-            files_table.add_row(file["filename"], style=style)
+            pages_table.add_row(file["filename"], style=style)
     else:
-        files_table = Text("No files found!")
+        pages_table = Text("No files found!")
     action_panel = Panel(
-        "j: down\nk: up\nh: prev type\nl: next type\no: open file\nq: quit",
+        "j: down\nk: up\nh: prev page\nl: next page\ni: next type\no: open file\nq: quit",
         title="Actions",
     )
-    details = [f"[bold]{k}[/]: {v}" for k, v in files[selected_idx].items()]
+    details = [f"[bold]{k}[/]: {v}" for k, v in pages[selected_idx].items()]
     details_rows = Columns(details, equal=True, expand=False)
     details_panel = Panel(details_rows, title="Details", expand=False)
-    files_panel = Panel(files_table, title="Files")
+    pages_panel = Panel(pages_table, title="Files")
     action_layout = Layout(action_panel, ratio=1)
-    files_layout = Layout(files_panel, ratio=4)
+    pages_layout = Layout(pages_panel, ratio=4)
     details_layout = Layout(details_panel, ratio=2)
-    display.split_row(action_layout, files_layout, details_layout)
+    display.split_row(action_layout, pages_layout, details_layout)
     return display
 
 
@@ -273,7 +277,7 @@ def import_pdf_files(vault, import_dir_path):
                     ),
                 )
                 for page_number, error in page_errors.items():
-                    errors[filename].append(f'Page Error at {page_number:4}: {error}')
+                    errors[filename].append(f"Page Error at {page_number:4}: {error}")
                 with Progress(
                     TextColumn(f"[green][{idx+1}/{tot}][/] [blue]Writing -[/] {filename[:40]}..."),
                     SpinnerColumn("line"),
@@ -296,7 +300,7 @@ def console_loop_search_panel(pages, get_pdf_url):
     selected = 0
     page_len = 10
     page = 0
-    page_count = math.floor(length / page_len)
+    page_count = math.ceil(length / page_len)
     start = page * page_len
     end = (page + 1) * page_len
     with Live(
@@ -315,10 +319,10 @@ def console_loop_search_panel(pages, get_pdf_url):
                     break
                 case b"j":
                     if length:
-                        selected = (selected + 1) % page_len
+                        selected = (selected + 1) % len(pages[start:end])
                 case b"k":
                     if length:
-                        selected = (selected - 1) % page_len
+                        selected = (selected - 1) % len(pages[start:end])
                 case b"h":
                     if length:
                         page = (page - 1) % page_count
@@ -347,17 +351,24 @@ def console_loop_search_panel(pages, get_pdf_url):
 def console_loop_browse_panel(files, get_pdf_url):
     types = list(files.keys())
     t_len = len(types)
+    p_len = 10
     t_idx = 0
-    lens = {i: len(v) for i, v in enumerate(files.values())}
-    idxs = {t: 0 for t in range(t_len)}
+    lens = [len(v) for v in files.values()]
+    s_idxs = [0 for _ in types]
+    p_idxs = [0 for _ in types]
+    p_counts = [math.ceil(f / p_len) for f in lens]
+    start = p_idxs[t_idx] * p_len
+    end = (p_idxs[t_idx] + 1) * p_len
     if not files:
         console.print("No files found! Add PDF file using the `add` command.")
         return
     with Live(
         browse_panel(
-            files[types[t_idx]],
+            files[types[t_idx]][start:end],
             types[t_idx],
-            idxs[t_idx],
+            s_idxs[t_idx],
+            p_idxs[t_idx],
+            p_counts[t_idx],
         ),
         transient=True,
         auto_refresh=False,
@@ -365,9 +376,11 @@ def console_loop_browse_panel(files, get_pdf_url):
         while True:
             live.update(
                 browse_panel(
-                    files[types[t_idx]],
+                    files[types[t_idx]][start:end],
                     types[t_idx],
-                    idxs[t_idx],
+                    s_idxs[t_idx],
+                    p_idxs[t_idx],
+                    p_counts[t_idx],
                 ),
                 refresh=True,
             )
@@ -377,24 +390,36 @@ def console_loop_browse_panel(files, get_pdf_url):
                     break
                 case b"j":
                     if lens[t_idx]:
-                        idxs[t_idx] = (idxs[t_idx] + 1) % lens[t_idx]
+                        s_idxs[t_idx] = (s_idxs[t_idx] + 1) % len(files[types[t_idx]][start:end])
                 case b"k":
                     if lens[t_idx]:
-                        idxs[t_idx] = (idxs[t_idx] - 1) % lens[t_idx]
+                        s_idxs[t_idx] = (s_idxs[t_idx] - 1) % len(files[types[t_idx]][start:end])
                 case b"h":
-                    if t_len:
-                        t_idx = (t_idx - 1) % t_len
+                    if lens[t_idx]:
+                        p_idxs[t_idx] = (p_idxs[t_idx] - 1) % p_counts[t_idx]
+                        start = p_idxs[t_idx] * p_len
+                        end = (p_idxs[t_idx] + 1) * p_len
+                        s_idxs[t_idx] = 0
                 case b"l":
+                    if lens[t_idx]:
+                        p_idxs[t_idx] = (p_idxs[t_idx] + 1) % p_counts[t_idx]
+                        start = p_idxs[t_idx] * p_len
+                        end = (p_idxs[t_idx] + 1) * p_len
+                        s_idxs[t_idx] = 0
+                case b"i":
                     if t_len:
                         t_idx = (t_idx + 1) % t_len
+                        start = p_idxs[t_idx] * p_len
+                        end = (p_idxs[t_idx] + 1) * p_len
                 case b"o":
                     if lens[t_idx]:
-                        filename = files[types[t_idx]][idxs[t_idx]]["filename"]
+                        filename = files[types[t_idx]][s_idxs[t_idx]]["filename"]
                         browser = webbrowser.get()
                         url = get_pdf_url(types[t_idx], filename)
                         browser.open(url)
                 case _:
                     continue
+
 
 def console_loop_add_panel(vault: Vault, pdf_file_path: pathlib.Path):
     if not pdf_file_path.exists() or not pdf_file_path.is_file():
@@ -423,9 +448,7 @@ def console_loop_add_panel(vault: Vault, pdf_file_path: pathlib.Path):
     metadata = pdf_file.metadata
     metadata_dict = {}
     for key in metadata_keys:
-        metadata_dict[f"/{key}"] = Prompt.ask(
-            key, default=metadata.get(f"/{key}", "")
-        )
+        metadata_dict[f"/{key}"] = Prompt.ask(key, default=metadata.get(f"/{key}", ""))
     pdf_file.update_metadata(metadata_dict)
     pdf_file.write_file_index()
     page_errors = pdf_file.write_page_index(
@@ -433,9 +456,9 @@ def console_loop_add_panel(vault: Vault, pdf_file_path: pathlib.Path):
         track_indexing=lambda x: track(x, "Indexing", transient=True),
     )
     if page_errors:
-        console.print('Errors:', style='red bold')
+        console.print("Errors:", style="red bold")
         for page_number, error in page_errors.items():
-            console.print(f'    {page_number:4}: {error}', style='red')
+            console.print(f"    {page_number:4}: {error}", style="red")
     with Progress(
         TextColumn("Writing PDF"),
         SpinnerColumn("line"),
