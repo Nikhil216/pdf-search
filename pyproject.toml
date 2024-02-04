@@ -21,7 +21,7 @@ dependencies = [
   "polars == 0.19.2",
   "whoosh == 2.7.4",
   "rich >= 13.5, < 14",
-  "pypdf >= 3.15, < 4",
+  "pypdf >= 4, < 5",
   "xlsx2csv >= 0.8, < 1",
   "python-doctr >= 0.7.0, < 1",
   "torch >= 2.0.0, < 3",

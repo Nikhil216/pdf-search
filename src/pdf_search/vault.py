@@ -72,8 +72,9 @@ class Vault:
             pages_schema = f.Schema(
                 id=f.ID(stored=True, unique=True),
                 text=f.TEXT(analyzer=StandardAnalyzer()),
-                filename=f.STORED,
-                pdf_type=f.STORED,
+                filename=f.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                authors=f.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                pdf_type=f.ID(stored=True),
                 page_number=f.NUMERIC(stored=True),
                 file_id=f.ID(stored=True),
             )
@@ -84,7 +85,7 @@ class Vault:
                 authors=f.IDLIST(stored=True),
                 year=f.ID(stored=True),
                 doi=f.ID(stored=True),
-                edition=f.STORED,
+                edition=f.ID(stored=True),
                 isbn10=f.ID(stored=True),
                 isbn13=f.ID(stored=True),
                 journal=f.ID(stored=True),
@@ -134,9 +135,11 @@ class Vault:
         page_writer.commit()
 
     @check_status_ok
-    def write_page_index(self, page_id, text, pdf_type, filename):
+    def write_page_index(self, page_id, text, pdf_type, filename, authors):
         page_writer = self.page_index.writer()
-        page_writer.add_document(id=page_id, text=text, filename=filename, pdf_type=pdf_type)
+        page_writer.add_document(
+            id=page_id, text=text, filename=filename, pdf_type=pdf_type, authors=authors
+        )
         page_writer.commit()
 
     def get_pdf_url(self, pdf_type, filename) -> str:
@@ -162,11 +165,11 @@ class Vault:
 
     @check_status_ok
     def search_pages(self, search_query_str, limit=10):
-        # query_str = build_search_query(search_query_str)
-        # page_text_query = MultifieldParser(
-        #     ["text", "filename", "pdf_type", "authors"], self.page_index.schema
-        # ).parse(query_str)
-        page_text_query = QueryParser("text", self.page_index.schema).parse(search_query_str)
+        query_str = build_search_query(search_query_str)
+        page_text_query = MultifieldParser(
+            ["text", "filename", "pdf_type", "authors"], self.page_index.schema
+        ).parse(query_str)
+        # page_text_query = QueryParser("text", self.page_index.schema).parse(search_query_str)
         results = []
         with self.page_index.searcher() as s:
             pages = s.search(page_text_query, limit=limit)
@@ -179,19 +182,19 @@ class Vault:
                         "page_number": page["page_number"],
                     }
                 )
-        file_query_str = " OR ".join(set([page["file_id"] for page in results]))
-        file_title_query = QueryParser("id", self.file_index.schema).parse(file_query_str)
-        file_map = {}
-        with self.file_index.searcher() as s:
-            files = s.search(file_title_query)
-            for file in files:
-                file_map[file["id"]] = {
-                    "filename": file["filename"],
-                    "pdf_type": file["type"],
-                }
-        for page in results:
-            page["filename"] = file_map[page["file_id"]]["filename"]
-            page["pdf_type"] = file_map[page["file_id"]]["pdf_type"]
+        # file_query_str = " OR ".join(set([page["file_id"] for page in results]))
+        # file_title_query = QueryParser("id", self.file_index.schema).parse(file_query_str)
+        # file_map = {}
+        # with self.file_index.searcher() as s:
+        #     files = s.search(file_title_query)
+        #     for file in files:
+        #         file_map[file["id"]] = {
+        #             "filename": file["filename"],
+        #             "pdf_type": file["type"],
+        #         }
+        # for page in results:
+        #     page["filename"] = file_map[page["file_id"]]["filename"]
+        #     page["pdf_type"] = file_map[page["file_id"]]["pdf_type"]
         return results
 
     @check_status_ok

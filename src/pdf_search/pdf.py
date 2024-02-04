@@ -66,7 +66,7 @@ class PdfFile:
         for page in track_hashing(self.reader.pages):
             page_text = page.extract_text()
             ## OCR predictions of images
-            image_text = ''
+            image_text = ""
             try:
                 if page.images:
                     image_files = page.images
@@ -86,6 +86,7 @@ class PdfFile:
                     "filename": self.generate_filename(),
                     "pdf_type": self.pdf_type,
                     "page_number": page.page_number + 1,
+                    "authors": self.metadata["/Authors"],
                 }
             )
         self.vault.write_multiple_page_index(pages, track_indexing)
@@ -101,12 +102,16 @@ class PdfFile:
             "year": self.metadata["/Year"],
             "doi": self.metadata["/DOI"] if self.metadata.get("/DOI", "") else "",
             "edition": self.metadata["/Edition"] if self.metadata.get("/Edition", "") else "",
-            "isbn10": self.metadata["/ISBN10"].replace("-", "")
-            if self.metadata.get("/ISNB10", "")
-            else "",
-            "isbn13": self.metadata["/ISBN13"].replace("-", "")
-            if self.metadata.get("/ISNB13", "")
-            else "",
+            "isbn10": (
+                self.metadata["/ISBN10"].replace("-", "")
+                if self.metadata.get("/ISNB10", "")
+                else ""
+            ),
+            "isbn13": (
+                self.metadata["/ISBN13"].replace("-", "")
+                if self.metadata.get("/ISNB13", "")
+                else ""
+            ),
             "journal": self.metadata["/Journal"] if self.metadata.get("/Journal", "") else "",
             "volume": self.metadata["/Volume"] if self.metadata.get("/Volume", "") else "",
             "pages": self.metadata["/Pages"] if self.metadata.get("/Pages", "") else "",

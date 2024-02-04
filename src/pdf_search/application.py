@@ -69,10 +69,11 @@ def run_console_loop(vault_path: pathlib.Path):
                 case ["search", *rest]:
                     if rest:
                         ## Write a query language here
-                        ## to search file title and authors "file: <filename>"
-                        ## add AND keyword search with "+<keyword>"
-                        ## add OR keyword search with "?<keyword>"
-                        ## space seperated words are treated as exact keywords
+                        ## to search file title, authors by keywords
+                        ## "file: <filename> author: <author>"
+                        ## file type can be filters by using the exact type
+                        ## "type: <docs|papers|book|thesis>"
+                        ## space seperated words are treated as exact keywords in text
                         query_str = " ".join(rest)
                         pages = vault.search_pages(query_str, limit=100)
                         console_loop_search_panel(pages, vault.get_pdf_url)
