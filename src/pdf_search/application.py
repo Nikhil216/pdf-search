@@ -85,23 +85,28 @@ def run_console_loop(vault_path: pathlib.Path):
                 case ["import", *rest]:
                     if rest:
                         import_dir_path = pathlib.Path(rest[0])
-                        start_time = time.time()
-                        total, errors = import_pdf_files(vault, import_dir_path)
-                        duration = (time.time() - start_time) / 3600  ## hours
-                        import_log_path = import_dir_path / "import_log.txt"
-                        console.print(
-                            f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours"
-                        )
-                        with open(import_log_path, "w") as f:
-                            f.write(
-                                f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours\n"
+                        if import_dir_path.is_dir():
+                            start_time = time.time()
+                            total, errors = import_pdf_files(vault, import_dir_path)
+                            duration = (time.time() - start_time) / 3600  ## hours
+                            import_log_path = import_dir_path / "import_log.txt"
+                            console.print(
+                                f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours"
                             )
-                            if errors:
-                                f.write("Import Errors:\n")
-                                for filename, error_list in errors.items():
-                                    error_string = "\n>>> ".join([str(e) for e in error_list])
-                                    f.write(f"  {filename}\n")
-                                    f.write(f"  >>> {error_string}\n")
+                            with open(import_log_path, "w") as f:
+                                f.write(
+                                    f"Imported {total - len(errors)}/{total} PDF files in {duration:.2f} hours\n"
+                                )
+                                if errors:
+                                    f.write("Import Errors:\n")
+                                    for filename, error_list in errors.items():
+                                        error_string = "\n>>> ".join([str(e) for e in error_list])
+                                        f.write(f"  {filename}\n")
+                                        f.write(f"  >>> {error_string}\n")
+                        else:
+                            console.print(
+                                "Error: Expected path must be a directory", style="red bold"
+                            )
                     else:
                         console.print("Error: Missing import directory path", style="red bold")
                 case ["nuke"]:
@@ -208,26 +213,26 @@ def import_pdf_files(vault, import_dir_path):
     pdf_dir_path = import_dir_path / "files"
     excel_path = import_dir_path / "details.xlsx"
     import_schema = {
-        "Filename": str,
-        "Type": str,
-        "Authors": str,
-        "Title": str,
-        "Year": str,
-        "Edition": str,
+        "filename": str,
+        "type": str,
+        "author": str,
+        "title": str,
+        "year": str,
+        "edition": str,
         "ISBN10": str,
         "ISBN13": str,
         "DOI": str,
-        "Journal": str,
-        "Volume": str,
-        "PageRange": str,
-        "Keywords": str,
-        "Course": str,
+        "journal": str,
+        "volume": str,
+        "pageRange": str,
+        "keywords": str,
+        "course": str,
     }
     df = pl.read_excel(
         excel_path, read_csv_options={"dtypes": import_schema, "missing_utf8_is_empty_string": True}
     )
     files_filenames = set(os.listdir(pdf_dir_path))
-    details_filenames = set(df["Filename"].map_elements(lambda filename: f"{filename}.pdf"))
+    details_filenames = set(df["filename"].map_elements(lambda filename: f"{filename}.pdf"))
     missing_pdfs = details_filenames - files_filenames
     if missing_pdfs:
         console.print(f"Warning: Found {len(missing_pdfs)} missing pdf files", style="yellow")
@@ -242,7 +247,7 @@ def import_pdf_files(vault, import_dir_path):
     tot = len(rows)
     errors = {}
     for idx, record in enumerate(rows):
-        filename = record["Filename"]
+        filename = record["filename"]
         errors[filename] = []
         try:
             if filename not in missing_pdfs:
@@ -258,21 +263,23 @@ def import_pdf_files(vault, import_dir_path):
                     pdf_file = pdf.PdfFile(vault, pdf_file_path)
                 metadata_dict = {}
                 for key in record:
-                    if key not in ["Type", "Filename"]:
-                        metadata_dict[f"/{key}"] = record[key]
-                pdf_file.pdf_type = record["Type"]
+                    if key not in ["type", "filename"]:
+                        metadata_dict[key] = record[key]
+                pdf_file.pdf_type = record["type"]
                 pdf_file.update_metadata(metadata_dict)
                 pdf_file.write_file_index()
                 page_errors = pdf_file.write_page_index(
                     track_hashing=lambda x: track(
                         x,
                         f"[green][{idx+1}/{tot}][/] [blue]Hashing -[/] {filename[:40]}...",
+                        total=pdf_file.document.page_count,
                         transient=True,
                         console=console,
                     ),
                     track_indexing=lambda x: track(
                         x,
                         f"[green][{idx+1}/{tot}][/] [blue]Indexing -[/] {filename[:40]}...",
+                        total=pdf_file.document.page_count,
                         transient=True,
                         console=console,
                     ),
@@ -438,23 +445,27 @@ def console_loop_add_panel(vault: Vault, pdf_file_path: pathlib.Path):
     ) as progress:
         progress.add_task("Reading PDF")
         pdf_file = pdf.PdfFile(vault, pdf_file_path)
-    metadata_keys = ["Authors", "Title", "Year"]
+    metadata_keys = ["author", "title", "year"]
     pdf_type = Prompt.ask("Type", console=console, choices=PDF_TYPES)
     pdf_file.pdf_type = pdf_type
     if pdf_type == "books":
-        metadata_keys += ["Edition", "ISBN10", "ISBN13"]
+        metadata_keys += ["edition", "ISBN10", "ISBN13"]
     if pdf_type == "papers":
-        metadata_keys += ["DOI", "Journal", "Volume", "PageRange", "Keywords"]
+        metadata_keys += ["DOI", "journal", "volume", "pageRange", "keywords"]
     ## TODO: Add page previewer
     metadata = pdf_file.metadata
     metadata_dict = {}
     for key in metadata_keys:
-        metadata_dict[f"/{key}"] = Prompt.ask(key, default=metadata.get(f"/{key}", ""))
+        metadata_dict[key] = Prompt.ask(key, default=metadata.get(key, ""))
     pdf_file.update_metadata(metadata_dict)
     pdf_file.write_file_index()
     page_errors = pdf_file.write_page_index(
-        track_hashing=lambda x: track(x, "Hashing", transient=True),
-        track_indexing=lambda x: track(x, "Indexing", transient=True),
+        track_hashing=lambda x: track(
+            x, "Hashing", total=pdf_file.document.page_count, transient=True
+        ),
+        track_indexing=lambda x: track(
+            x, "Indexing", total=pdf_file.document.page_count, transient=True
+        ),
     )
     if page_errors:
         console.print("Errors:", style="red bold")
