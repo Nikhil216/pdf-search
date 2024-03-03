@@ -81,7 +81,7 @@ def run_console_loop(vault_path: pathlib.Path):
                         console.print("Error: missing search query", style="bold red")
                 case ["browse"]:
                     files = vault.list_all_files()
-                    console_loop_browse_panel(files, vault.get_pdf_url)
+                    console_loop_browse_panel(files, vault.get_pdf_url, vault.remove_file_index, vault.get_pdf_filepath)
                 case ["import", *rest]:
                     if rest:
                         import_dir_path = pathlib.Path(rest[0])
@@ -193,7 +193,7 @@ def browse_panel(pages, pdf_type, selected_idx, page_idx, page_count):
     else:
         pages_table = Text("No files found!")
     action_panel = Panel(
-        "j: down\nk: up\nh: prev page\nl: next page\ni: next type\no: open file\nq: quit",
+        "j: down\nk: up\nh: prev page\nl: next page\ni: next type\no: open file\nx: remove file\nq: quit",
         title="Actions",
     )
     details = [f"[bold]{k}[/]: {v}" for k, v in pages[selected_idx].items()]
@@ -356,7 +356,7 @@ def console_loop_search_panel(pages, get_pdf_url):
                     continue
 
 
-def console_loop_browse_panel(files, get_pdf_url):
+def console_loop_browse_panel(files, get_pdf_url, remove_file_index, get_file_path):
     types = list(files.keys())
     t_len = len(types)
     p_len = 10
@@ -421,10 +421,22 @@ def console_loop_browse_panel(files, get_pdf_url):
                         end = (p_idxs[t_idx] + 1) * p_len
                 case b"o":
                     if lens[t_idx]:
-                        filename = files[types[t_idx]][s_idxs[t_idx]]["filename"]
+                        filename = files[types[t_idx]][start + s_idxs[t_idx]]["filename"]
                         browser = webbrowser.get()
                         url = get_pdf_url(types[t_idx], filename)
                         browser.open(url)
+                case b"x":
+                    if lens[t_idx]:
+                        pdf_type = types[t_idx]
+                        file = files[pdf_type][start + s_idxs[t_idx]]
+                        if "deleted" not in file or not file["deleted"]:
+                            file_id = file["id"]
+                            filename = file["filename"]
+                            fs_del, ps_del = remove_file_index(file_id)
+                            filepath = get_file_path(pdf_type, filename)
+                            pathlib.Path(filepath).unlink(missing_ok=True)
+                            file["filename"] = f"[Deleted {fs_del}, {ps_del}] {filename}"
+                            file["deleted"] = True
                 case _:
                     continue
 
