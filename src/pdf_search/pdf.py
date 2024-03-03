@@ -15,6 +15,8 @@ UTC_TIME = "+05'30"
 
 
 class PdfFile:
+    ocr_model = ocr_predictor(pretrained=True)
+
     def __init__(self, vault: Vault, file_path: str):
         self.vault = vault
         self.file_path = pathlib.Path(file_path)
@@ -22,7 +24,6 @@ class PdfFile:
         self.metadata = self.read_metadata()
         self.file_hash = hashlib.sha1(self.document.tobytes()).hexdigest()
         self.pdf_type = None
-        self.ocr_model = ocr_predictor(pretrained=True)
 
     def read_metadata(self) -> dict[str, str]:
         metadata = self.document.metadata

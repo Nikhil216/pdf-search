@@ -81,7 +81,9 @@ def run_console_loop(vault_path: pathlib.Path):
                         console.print("Error: missing search query", style="bold red")
                 case ["browse"]:
                     files = vault.list_all_files()
-                    console_loop_browse_panel(files, vault.get_pdf_url, vault.remove_file_index, vault.get_pdf_filepath)
+                    console_loop_browse_panel(
+                        files, vault.get_pdf_url, vault.remove_file_index, vault.get_pdf_filepath
+                    )
                 case ["import", *rest]:
                     if rest:
                         import_dir_path = pathlib.Path(rest[0])
@@ -246,6 +248,27 @@ def import_pdf_files(vault, import_dir_path):
     rows = df.rows(named=True)
     tot = len(rows)
     errors = {}
+
+    duplicate_filenames = []
+    import_file_names = files_filenames - missing_details
+    import_file_ids = set()
+    for filename in import_file_names:
+        pdf_file_path = pdf_dir_path / filename
+        try:
+            pdf_file = pdf.PdfFile(vault, pdf_file_path)
+            import_file_ids.add(pdf_file.file_hash)
+        except Exception as e:
+            console.print(f"Cannot hash {filename}: {e}")
+    vault_files = vault.list_all_files()
+    for fs in vault_files.values():
+        for f in fs:
+            if f["id"] in import_file_ids:
+                duplicate_filenames.append(f["filename"])
+    if duplicate_filenames:
+        console.print(f"Warning: Found {len(duplicate_filenames)} duplicate files", style="yellow")
+        for idx, pdf_filename in enumerate(duplicate_filenames):
+            console.print(f"{idx + 1:6}. {pdf_filename}")
+
     for idx, record in enumerate(rows):
         filename = record["filename"]
         errors[filename] = []
