@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pdf-search"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
   { name="Nikhil Devadiga", email="nmdevadiga216@gmail.com"},
 ]
@@ -21,12 +21,13 @@ dependencies = [
   "polars == 0.19.2",
   "whoosh == 2.7.4",
   "rich >= 13.5, < 14",
-  "pypdf >= 4, < 5",
+  "pymupdf == 1.23.25",
   "xlsx2csv >= 0.8, < 1",
   "python-doctr >= 0.7.0, < 1",
   "torch >= 2.0.0, < 3",
   "torchvision >= 0.15.2, < 1",
   "pycryptodome == 3.19.0",
+  "pegen == 0.3.0",
 ]
 
 [tool.hatch.version]
