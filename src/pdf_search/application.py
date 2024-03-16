@@ -458,7 +458,7 @@ def console_loop_browse_panel(files, get_pdf_url, remove_file_index, get_file_pa
                             fs_del, ps_del = remove_file_index(file_id)
                             filepath = get_file_path(pdf_type, filename)
                             pathlib.Path(filepath).unlink(missing_ok=True)
-                            file["filename"] = f"[Deleted {fs_del}, {ps_del}] {filename}"
+                            file["filename"] = f"[Deleted {ps_del} pages] {filename}"
                             file["deleted"] = True
                 case _:
                     continue
