@@ -134,6 +134,7 @@ def run_console_loop(vault_path: pathlib.Path):
                         "    [blue]nuke[/]\t\tDelete all files and index inside the vault"
                     )
                     console.print("    [blue]browse[/]\t\tBrowse through the files in the vault")
+                    console.print("    [blue]import <path>[/]\tImport several files at once")
                 case ["quit"]:
                     return
                 case _:
